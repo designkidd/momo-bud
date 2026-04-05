@@ -64,6 +64,7 @@
   --focus:var(--accent);
 }
 [data-theme="dark"] {
+  color-scheme:dark;
   --bg:#252628;
   --bg-alt:#202223;
   --bg-soft:#202223;

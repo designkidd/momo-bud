@@ -120,8 +120,8 @@ function initCustomSelect(sel){
 /* ---------- Custom dialog helpers (replaces native confirm/alert) ---------- */
 function _optDialog(msg, isConfirm){
   return new Promise(resolve=>{
-    const okText     = t('ok')     || '確定';
-    const cancelText = t('cancel') || '取消';
+    const okText     = t('ok')     || 'OK';
+    const cancelText = t('cancel') || 'Cancel';
     const ov=document.createElement('div');
     ov.className='custom-dialog-overlay';
     ov.innerHTML=`<div class="custom-dialog-box"><p class="custom-dialog-msg">${escapeHtml(String(msg))}</p><div class="custom-dialog-actions">${isConfirm?`<button class="custom-dialog-btn custom-dialog-btn-cancel">${escapeHtml(cancelText)}</button>`:''}<button class="custom-dialog-btn custom-dialog-btn-ok">${escapeHtml(okText)}</button></div></div>`;
@@ -146,6 +146,11 @@ function setStatus(msg,type){
 function setTestStatus(msg,type){
   els.testStatus.textContent=msg||'';
   els.testStatus.className='inline-status'+(type?(' '+type):'');
+  // Mirror to OpenClaw inline test status
+  if(els.testStatusOC){
+    els.testStatusOC.textContent=msg||'';
+    els.testStatusOC.className='inline-status'+(type?(' '+type):'');
+  }
   if(msg) setTimeout(()=>{ if(els.testStatus.textContent===msg) setTestStatus(); },6000);
 }
 /* normalizeEndpoint, buildChatCompletionsUrl, normalizeExcludeSelectors now in js/utils.js */
@@ -319,20 +324,30 @@ function loadProviderConfig(providerId){
   
   // Update hint
   if(els.providerBaseUrlHint){
-    const hintText = tpl('hintUseDefault',{url: defaultUrl || t('hintNone')});
-    
+    const hintLabel = t('hintUseDefault') !== 'hintUseDefault'
+      ? tpl('hintUseDefault',{url: defaultUrl || ''})
+      : 'Leave empty to use default: ' + (defaultUrl || '');
+    const apiKeyLabel = t('apiKeyApplyHint') !== 'apiKeyApplyHint'
+      ? t('apiKeyApplyHint')
+      : 'Apply for API Key here:';
+
     // 針對不同 Provider 添加 API Key 申請連結提示
     const apiKeyLinks = {
       google: 'https://aistudio.google.com/api-keys',
       openai: 'https://platform.openai.com/api-keys',
       deepseek: 'https://platform.deepseek.com/api_keys',
-      qwen: 'https://dashscope.console.aliyun.com/apiKeys'
+      qwen: 'https://dashscope.console.aliyun.com/apiKeys',
+      moonshot: 'https://platform.moonshot.ai/console/api-keys',
+      nvidia: 'https://build.nvidia.com/settings/api-keys',
+      minimax: 'https://platform.minimax.io/user-center/basic-information/interface-key',
+      openrouter: 'https://openrouter.ai/keys',
+      ollama: 'https://ollama.com/settings/keys'
     };
     
     if(apiKeyLinks[providerId]){
-      els.providerBaseUrlHint.innerHTML = `${hintText}<br>${t('apiKeyApplyHint')} <a href="${apiKeyLinks[providerId]}" target="_blank" style="color:var(--accent);text-decoration:underline;">${apiKeyLinks[providerId]}</a>`;
+      els.providerBaseUrlHint.innerHTML = `${hintLabel}<br>${apiKeyLabel} <a href="${apiKeyLinks[providerId]}" target="_blank" style="color:var(--accent);text-decoration:underline;">${apiKeyLinks[providerId]}</a>`;
     } else {
-      els.providerBaseUrlHint.textContent = hintText;
+      els.providerBaseUrlHint.textContent = hintLabel;
     }
   }
   
@@ -341,10 +356,18 @@ function loadProviderConfig(providerId){
     els.providerApiKey.value = provider.apiKey || '';
   }
 
-  // OpenClaw-specific: Tutorial button & Session Select field
+  // OpenClaw-specific: simple toggle, tutorial, test, session
   {
     const isOpenClaw = !!PROVIDER_DEFAULTS[providerId]?.isOpenClaw;
-    if(els.openclawTutorialField) els.openclawTutorialField.classList.toggle('hidden', !isOpenClaw);
+    if(els.secModels) els.secModels.classList.toggle('hidden', isOpenClaw);
+    if(els.secOpenclawToggle) els.secOpenclawToggle.classList.toggle('hidden', !isOpenClaw);
+    if(els.testConnectionField) els.testConnectionField.classList.toggle('hidden', isOpenClaw);
+    if(els.openclawTestRow) els.openclawTestRow.classList.toggle('hidden', !isOpenClaw);
+    if(isOpenClaw && els.openclawModelToggle){
+      // Default: off + disabled until connected
+      els.openclawModelToggle.checked = false;
+      els.openclawModelToggle.disabled = true;
+    }
   }
   if(els.openclawSessionKeyField){
     const isOpenClaw = !!PROVIDER_DEFAULTS[providerId]?.isOpenClaw;
@@ -422,9 +445,15 @@ function saveCurrentProviderConfig(){
   }
   
   // Collect current models from UI
-  let currentModels = collectModels();
-  // 嚴格清理：移除不屬於當前 provider 的模型（防止跨 provider 污染）
-  currentModels = sanitizeModels(currentModels, currentProvider);
+  let currentModels;
+  if(PROVIDER_DEFAULTS[currentProvider]?.isOpenClaw && els.openclawModelToggle){
+    // OpenClaw uses simple toggle, not model list
+    currentModels = [{ name: 'openclaw', enabled: els.openclawModelToggle.checked, provider: currentProvider }];
+  } else {
+    currentModels = collectModels();
+    // 嚴格清理：移除不屬於當前 provider 的模型（防止跨 provider 污染）
+    currentModels = sanitizeModels(currentModels, currentProvider);
+  }
   provider.models = currentModels;
   
   console.log(`[OPT] Saving config for ${currentProvider}, models:`, currentModels);
@@ -553,9 +582,12 @@ function cacheDom(){
     openclawSessionKeyField: $('#openclawSessionKeyField'),
     openclawSessionKey: $('#openclawSessionKey'),
     openclawSessionKeyHint: $('#openclawSessionKeyHint'),
+    sessionSwitchStatus: $('#sessionSwitchStatus'),
     btnLoadSessions: $('#btnLoadSessions'),
     openclawProviderOption: $('#openclawProviderOption'),
-    openclawTutorialField: $('#openclawTutorialField'),
+    openclawTestRow: $('#openclawTestRow'),
+    btnTestConnectionOC: $('#btnTestConnectionOC'),
+    testStatusOC: $('#testStatusOC'),
     btnOpenClawTutorial: $('#btnOpenClawTutorial'),
     openclawTutorialModal: $('#openclawTutorialModal'),
     thinkingModeField: $('#thinkingModeField'),
@@ -566,10 +598,14 @@ function cacheDom(){
     btnGrantHost: $('#btnGrantHost'),
     btnTestConnection: $('#btnTestConnection'),
     testStatus: $('#testStatus'),
+    testConnectionField: $('#testConnectionField'),
 
     btnAddModel: $('#btnAddModel'),
     modelList: $('#modelList'),
     modelCount: $('#modelCount'),
+    secModels: $('#sec-models'),
+    secOpenclawToggle: $('#sec-openclaw-toggle'),
+    openclawModelToggle: $('#openclawModelToggle'),
 
     themeSegment: $('#themeSegment'),
     showFloatBall: $('#showFloatBall'),
@@ -731,10 +767,31 @@ function bindEvents(){
 
   // OpenClaw Session 載入與選擇自動保存
   els.btnLoadSessions?.addEventListener('click', loadOpenClawSessions);
-  els.openclawSessionKey?.addEventListener('change', ()=>{ saveCurrentProviderConfig(); });
+  els.openclawSessionKey?.addEventListener('change', ()=>{
+    const statusEl = els.sessionSwitchStatus;
+    if(statusEl){
+      statusEl.textContent = t('sessionSwitching') || '切換中…';
+      statusEl.className = 'inline-status status-loading';
+    }
+    saveCurrentProviderConfig();
+    setTimeout(()=>{
+      if(statusEl){
+        statusEl.textContent = t('sessionSwitched') || '✓ 已切換';
+        statusEl.className = 'inline-status status-ok';
+        setTimeout(()=>{ statusEl.textContent = ''; statusEl.className = 'inline-status'; }, 2500);
+      }
+    }, 600);
+  });
 
   // 測試
   els.btnTestConnection.addEventListener('click', testConnection);
+  if(els.btnTestConnectionOC) els.btnTestConnectionOC.addEventListener('click', ()=>{
+    if(els.btnTestConnectionOC.classList.contains('btn-connected')){
+      disconnectOpenClaw();
+    } else {
+      testConnection();
+    }
+  });
 
   // 主題
   els.themeSegment.addEventListener('click',e=>{
@@ -796,11 +853,14 @@ function bindEvents(){
     els.languageSegment.addEventListener('click', e=>{
       const btn=e.target.closest('.seg-btn'); if(!btn) return;
       const lang=btn.dataset.lang; // hant | hans | en
-      chrome.storage.local.set({ zhVariant: lang }, ()=>{
+      chrome.storage.local.set({ zhVariant: lang }, async ()=>{
         chrome.storage.sync.set({ zhVariant: lang });
         currentLang = lang;
         [...els.languageSegment.querySelectorAll('.seg-btn')].forEach(b=>b.classList.toggle('active', b.dataset.lang===lang));
-        applyLanguageConversion();
+        await applyLanguageConversion();
+        // Re-render provider hint with new language
+        loadProviderConfig(currentProvider);
+        updateThinkingHint(currentProvider);
       });
     });
   }
@@ -832,6 +892,23 @@ function bindEvents(){
 
   // 模型
   els.btnAddModel.addEventListener('click',()=>addModelRow({name:'',enabled:true},true));
+
+  // OpenClaw simple toggle
+  if(els.openclawModelToggle){
+    els.openclawModelToggle.addEventListener('change', ()=>{
+      const enabled = els.openclawModelToggle.checked;
+      const provider = providersData[currentProvider];
+      if(!provider) return;
+      if(!provider.models) provider.models = [];
+      const existing = provider.models.find(m => m.name === 'openclaw');
+      if(existing){
+        existing.enabled = enabled;
+      } else {
+        provider.models.push({ name: 'openclaw', enabled });
+      }
+      saveCurrentProviderConfig();
+    });
+  }
 
   // Prompts
   els.btnAddPrompt.addEventListener('click', addPromptCard);
@@ -991,6 +1068,8 @@ async function loadAll(){
       console.warn('[OPT] Failed to apply translations:', err);
     }
   }
+  // Re-apply provider config now that i18n and currentLang are ready
+  loadProviderConfig(currentProvider);
   updateThinkingHint(currentProvider);
 
   // 初始化訊息字號
@@ -1147,7 +1226,7 @@ function initTtsSettings(merged){
     els.ttsVoiceSelect.innerHTML = '';
     const auto = document.createElement('option');
     auto.value = '';
-    auto.textContent = t('ttsVoiceAuto') || '自動（系統預設）';
+    auto.textContent = t('ttsVoiceAuto') || 'Auto (System Default)';
     els.ttsVoiceSelect.appendChild(auto);
 
     const langOrder = ['zh','ja','ko','en','fr','de','es','pt','it','ru'];
@@ -1242,7 +1321,7 @@ function bindTtsEvents(){
     els.ttsPreviewBtn.addEventListener('click', ()=>{
       if(!window.speechSynthesis) return;
       window.speechSynthesis.cancel();
-      const sampleText = t('ttsPreviewText') || '你好，這是語音預覽測試。';
+      const sampleText = t('ttsPreviewText') || 'Hello, this is a voice preview test.';
       const utterance = new SpeechSynthesisUtterance(sampleText);
       utterance.rate = parseFloat(els.ttsRateSlider?.value) || 1.0;
       utterance.pitch = parseFloat(els.ttsPitchSlider?.value) || 1.0;
@@ -1286,12 +1365,11 @@ async function loadOpenClawSessions(){
   const btn = els.btnLoadSessions;
   const select = els.openclawSessionKey;
   if(!btn || !select) return;
-  if(!wsUrl){ setTestStatus(t('gatewayUrlNotSet') || 'Gateway URL 未設定', 'error'); return; }
+  if(!wsUrl){ setTestStatus(t('gatewayUrlNotSet') || 'Gateway URL not set', 'error'); return; }
 
   const savedKey = select.dataset.savedKey || select.value || '';
-  const orig = btn.textContent;
   btn.disabled = true;
-  btn.textContent = '載入中…';
+  btn.classList.add('spinning');
 
   // Notify background to update Origin rules (same as testConnection)
   try{ chrome.runtime.sendMessage({ type:'openclaw_update_origin', wsUrl }); }catch(e){}
@@ -1300,15 +1378,15 @@ async function loadOpenClawSessions(){
   let ws, timer;
   try{
     const sessions = await new Promise((resolve, reject)=>{
-      timer = setTimeout(()=>reject(new Error(t('connectionTimeout') || '連線逾時')), 10000);
+      timer = setTimeout(()=>reject(new Error(t('connectionTimeout') || 'Connection timeout')), 10000);
       let connectReqId = 'sess_' + Date.now();
       let listReqId = null;
 
-      try{ ws = new WebSocket(wsUrl); }catch(e){ reject(new Error('無法建立 WebSocket: ' + e.message)); return; }
+      try{ ws = new WebSocket(wsUrl); }catch(e){ reject(new Error('Failed to create WebSocket: ' + e.message)); return; }
 
-      ws.onerror = ()=>reject(new Error(t('wsConnectionFailed') || 'WebSocket 連線失敗'));
+      ws.onerror = ()=>reject(new Error(t('wsConnectionFailed') || 'WebSocket connection failed'));
       ws.onclose = (evt)=>{
-        if(listReqId === null) reject(new Error('連線關閉: ' + (evt.reason || evt.code)));
+        if(listReqId === null) reject(new Error('Connection closed: ' + (evt.reason || evt.code)));
       };
       ws.onmessage = (evt)=>{
         let data;
@@ -1333,7 +1411,7 @@ async function loadOpenClawSessions(){
 
         // Step 2: hello-ok → request sessions.list
         if(data.type === 'res' && data.id === connectReqId){
-          if(!data.ok){ reject(new Error(data.error?.message || '認證失敗')); return; }
+          if(!data.ok){ reject(new Error(data.error?.message || 'Authentication failed')); return; }
           listReqId = 'list_' + Date.now();
           ws.send(JSON.stringify({ type:'req', id: listReqId, method:'sessions.list', params:{} }));
           return;
@@ -1343,7 +1421,7 @@ async function loadOpenClawSessions(){
         if(data.type === 'res' && data.id === listReqId){
           clearTimeout(timer);
           if(data.ok) resolve(data.payload?.sessions || []);
-          else reject(new Error(data.error?.message || 'sessions.list 失敗'));
+          else reject(new Error(data.error?.message || 'sessions.list failed'));
         }
       };
     });
@@ -1353,7 +1431,7 @@ async function loadOpenClawSessions(){
     if(sessions.length === 0){
       const opt = document.createElement('option');
       opt.value = '';
-      opt.textContent = '(無可用 Session)';
+      opt.textContent = t('noSessionAvailable') || '(No sessions available)';
       select.appendChild(opt);
     } else {
       sessions.forEach(s=>{
@@ -1387,7 +1465,7 @@ async function loadOpenClawSessions(){
     clearTimeout(timer);
     try{ ws?.close(); }catch(e){}
     btn.disabled = false;
-    btn.textContent = orig;
+    btn.classList.remove('spinning');
   }
 }
 
@@ -1406,6 +1484,27 @@ async function ensureHostPermission(ep){
   }catch(e){ return {granted:false, error:e}; }
 }
 
+function disconnectOpenClaw(){
+  const ocBtn = els.btnTestConnectionOC;
+  if(ocBtn){
+    ocBtn.textContent = t('openclawConnect');
+    ocBtn.disabled = false;
+    ocBtn.classList.remove('btn-connected');
+  }
+  // Disable model toggle and turn off
+  if(els.openclawModelToggle){
+    els.openclawModelToggle.checked = false;
+    els.openclawModelToggle.disabled = true;
+    els.openclawModelToggle.dispatchEvent(new Event('change'));
+  }
+  // Clear session list
+  if(els.openclawSessionKey){
+    els.openclawSessionKey.innerHTML = '<option value="">-- Connect to load Sessions --</option>';
+  }
+  setTestStatus('','');
+  console.log('[OpenClaw] Disconnected');
+}
+
 async function testConnection(){
   // Get current provider config
   const provider = providersData[currentProvider];
@@ -1421,12 +1520,13 @@ async function testConnection(){
 
   /* ── OpenClaw：WebSocket 握手測試 ── */
   if(PROVIDER_DEFAULTS[currentProvider]?.isOpenClaw){
+    const ocBtn = els.btnTestConnectionOC || btn;
     const wsUrl = (els.providerBaseUrl?.value.trim() || PROVIDER_DEFAULTS[currentProvider]?.baseUrl || '').replace(/\/+$/,'');
     const token = els.providerApiKey?.value.trim() || '';
     if(!wsUrl){ setTestStatus(t('gatewayUrlNotSet'),'error'); return; }
     // 通知 background 更新 Origin 規則
     try{ chrome.runtime.sendMessage({ type:'openclaw_update_origin', wsUrl }); }catch(e){}
-    btn.disabled=true; btn.textContent=t('testing'); setTestStatus(t('connecting'));
+    ocBtn.disabled=true; ocBtn.textContent=t('openclawConnecting'); setTestStatus(t('connecting'));
     // 等待規則生效
     await new Promise(r=>setTimeout(r, 300));
     let ws, timer;
@@ -1473,14 +1573,25 @@ async function testConnection(){
           }
         };
       });
-      setTestStatus(t('wsSuccess'),'success'); btn.textContent=t('successLabel');
+      setTestStatus('','');
+      ocBtn.textContent=t('openclawDisconnect');
+      ocBtn.disabled=false;
+      ocBtn.classList.add('btn-connected');
+      // Enable model toggle and turn on
+      if(els.openclawModelToggle){
+        els.openclawModelToggle.disabled = false;
+        els.openclawModelToggle.checked = true;
+        els.openclawModelToggle.dispatchEvent(new Event('change'));
+      }
+      // Auto-load sessions after successful connect
+      loadOpenClawSessions();
     }catch(e){
-      setTestStatus(tpl('failedPrefix',{msg:e.message}),'error'); btn.textContent=t('failedLabel');
+      setTestStatus(tpl('failedPrefix',{msg:e.message}),'error');
+      ocBtn.textContent=t('failedLabel');
+      setTimeout(()=>{ ocBtn.textContent=t('openclawConnect'); ocBtn.disabled=false; ocBtn.classList.remove('btn-connected'); },2500);
     }finally{
       clearTimeout(timer);
       try{ ws?.close(); }catch(e){}
-      const defaultLabel=btn.dataset.defaultLabel||orig||t('startTest');
-      setTimeout(()=>{ btn.textContent=defaultLabel; btn.disabled=false; },1700);
     }
     return;
   }
@@ -2157,69 +2268,68 @@ window.__debugPrompts = async function(){
 };
 
 async function applyLanguageConversion(){
-  chrome.storage.local.get('zhVariant', async ({zhVariant})=>{
-    const lang = zhVariant || _defaultLang();
-    console.log('[OPT] Applying language:', lang);
+  const {zhVariant} = await chrome.storage.local.get('zhVariant');
+  const lang = zhVariant || _defaultLang();
+  console.log('[OPT] Applying language:', lang);
 
-    function walkTextNodes(node, variant){
-      if(node.nodeType === Node.TEXT_NODE){
-        const text = node.textContent;
-        if(text && text.trim()){
-          node.textContent = __zhConvert(text, variant);
-        }
-      } else if(node.nodeType === Node.ELEMENT_NODE){
-        if(node.tagName === 'SCRIPT' || node.tagName === 'STYLE' || node.tagName === 'CODE') return;
-        if(node.hasAttribute('data-i18n') || node.hasAttribute('data-i18n-title') || 
-           node.hasAttribute('data-i18n-placeholder') || node.hasAttribute('data-i18n-tooltip') ||
-           node.hasAttribute('data-i18n-aria-label')) return;
-        if(node.tagName === 'OPTION' && node.hasAttribute('data-i18n')) return;
-        if(node.placeholder && !node.hasAttribute('data-i18n-placeholder')) {
-          node.placeholder = __zhConvert(node.placeholder, variant);
-        }
-        if(node.title && !node.hasAttribute('data-i18n-title')) {
-          node.title = __zhConvert(node.title, variant);
-        }
-        if(node.getAttribute('data-tooltip') && !node.hasAttribute('data-i18n-tooltip')) {
-          node.setAttribute('data-tooltip', __zhConvert(node.getAttribute('data-tooltip'), variant));
-        }
-        for(let child of node.childNodes){
-          walkTextNodes(child, variant);
-        }
+  function walkTextNodes(node, variant){
+    if(node.nodeType === Node.TEXT_NODE){
+      const text = node.textContent;
+      if(text && text.trim()){
+        node.textContent = __zhConvert(text, variant);
+      }
+    } else if(node.nodeType === Node.ELEMENT_NODE){
+      if(node.tagName === 'SCRIPT' || node.tagName === 'STYLE' || node.tagName === 'CODE') return;
+      if(node.hasAttribute('data-i18n') || node.hasAttribute('data-i18n-title') || 
+         node.hasAttribute('data-i18n-placeholder') || node.hasAttribute('data-i18n-tooltip') ||
+         node.hasAttribute('data-i18n-aria-label')) return;
+      if(node.tagName === 'OPTION' && node.hasAttribute('data-i18n')) return;
+      if(node.placeholder && !node.hasAttribute('data-i18n-placeholder')) {
+        node.placeholder = __zhConvert(node.placeholder, variant);
+      }
+      if(node.title && !node.hasAttribute('data-i18n-title')) {
+        node.title = __zhConvert(node.title, variant);
+      }
+      if(node.getAttribute('data-tooltip') && !node.hasAttribute('data-i18n-tooltip')) {
+        node.setAttribute('data-tooltip', __zhConvert(node.getAttribute('data-tooltip'), variant));
+      }
+      for(let child of node.childNodes){
+        walkTextNodes(child, variant);
       }
     }
-    
-    if(lang === 'en'){
-      if(typeof window.__applyTranslations === 'function'){
-        await window.__applyTranslations('en');
-      }
-      if(typeof window.__zhConvert === 'function'){
-        walkTextNodes(document.body, 'hant');
-      }
-      console.log('[OPT] Applied English translations');
-      return;
-    }
-    
-    if(typeof window.__zhConvert !== 'function') {
-      console.warn('[OPT] __zhConvert not loaded yet, retrying...');
-      setTimeout(applyLanguageConversion, 50);
-      return;
-    }
-    
-    if(lang === 'hant') {
-      if(typeof window.__applyTranslations === 'function'){
-        await window.__applyTranslations('hant');
-      }
-      walkTextNodes(document.body, 'hant');
-      console.log('[OPT] Applied traditional Chinese');
-      return;
-    }
-    
+  }
+  
+  if(lang === 'en'){
     if(typeof window.__applyTranslations === 'function'){
-      await window.__applyTranslations('hans');
+      await window.__applyTranslations('en');
     }
-    walkTextNodes(document.body, 'hans');
-    console.log('[OPT] Applied simplified Chinese');
-  });
+    if(typeof window.__zhConvert === 'function'){
+      walkTextNodes(document.body, 'hant');
+    }
+    console.log('[OPT] Applied English translations');
+    return;
+  }
+  
+  if(typeof window.__zhConvert !== 'function') {
+    console.warn('[OPT] __zhConvert not loaded yet, retrying...');
+    await new Promise(r => setTimeout(r, 50));
+    return applyLanguageConversion();
+  }
+  
+  if(lang === 'hant') {
+    if(typeof window.__applyTranslations === 'function'){
+      await window.__applyTranslations('hant');
+    }
+    walkTextNodes(document.body, 'hant');
+    console.log('[OPT] Applied traditional Chinese');
+    return;
+  }
+  
+  if(typeof window.__applyTranslations === 'function'){
+    await window.__applyTranslations('hans');
+  }
+  walkTextNodes(document.body, 'hans');
+  console.log('[OPT] Applied simplified Chinese');
 }
 
 /* ---------- Web Search Settings ---------- */

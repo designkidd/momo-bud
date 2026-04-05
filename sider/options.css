@@ -108,8 +108,8 @@ section[id] { scroll-margin-top:100px; }
 }
 
 .btn-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .btn.recording {
@@ -205,6 +205,27 @@ textarea.input { min-height:110px; resize:vertical; line-height:1.5; }
 .inline-status.success { color:var(--success); }
 .inline-status.error { color:var(--danger); }
 .inline-status.warning { color:var(--accent); }
+.inline-status.status-loading { color:var(--accent); }
+.inline-status.status-ok { color:var(--success); }
+
+/* ---- Connected button state ---- */
+.btn-connected {
+  color:var(--success) !important;
+  border-color:var(--success) !important;
+  cursor:pointer;
+  opacity:.85;
+}
+.btn-connected:hover {
+  color:var(--danger) !important;
+  border-color:var(--danger) !important;
+  opacity:1;
+}
+
+/* ---- Refresh button ---- */
+.btn-refresh { padding:7px 10px; min-width:0; }
+.btn-refresh svg { display:block; }
+.btn-refresh.spinning svg { animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
 
 /* ---- theme segment ---- */
 .seg-group { display:flex; gap:6px; padding:4px; background:var(--bg-subtle); border:1px solid var(--border); border-radius:14px; width:360px; max-width:100%; transition:border-color .18s; }
@@ -430,6 +451,20 @@ html[data-theme="dark"] .seg-group .seg-btn.active:hover { background:var(--bg-a
 .openclaw-tutorial-btn {
   gap:6px;
   white-space:nowrap;
+}
+
+/* ---- OpenClaw action row (Start Test left, Setup Guide right) ---- */
+.openclaw-action-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.openclaw-action-left {
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
 
 /* ---- OpenClaw Tutorial Modal ---- */

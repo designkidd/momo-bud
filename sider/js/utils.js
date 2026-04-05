@@ -80,7 +80,7 @@ const PROVIDER_DEFAULTS = {
   google: {
     id: 'google', name: 'Google AI',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-pro-maxthinking']
+    models: ['gemini-2.5-flash', 'gemini-2.5-pro']
   },
   lmstudio: {
     id: 'lmstudio', name: 'LM Studio',
@@ -90,47 +90,44 @@ const PROVIDER_DEFAULTS = {
   minimax: {
     id: 'minimax', name: 'MiniMax',
     baseUrl: 'https://api.minimaxi.chat/v1',
-    models: ['MiniMax-Text-01', 'abab6.5s-chat', 'abab6.5-chat']
+    models: ['MiniMax-Text-01', 'abab6.5s-chat']
   },
   moonshot: {
     id: 'moonshot', name: 'Moonshot',
     baseUrl: 'https://api.moonshot.cn/v1',
-    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k', 'kimi-k2']
+    models: ['kimi-k2.5', 'kimi-k2']
   },
   nvidia: {
     id: 'nvidia', name: 'NVIDIA',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
-    models: ['nvidia/nemotron-3-super-120b-a12b', 'moonshotai/kimi-k2.5'],
-    enabledModels: []
+    models: ['nvidia/nemotron-3-super-120b-a12b', 'nvidia/nemotron-3-nano-30b-a3b']
   },
   ollama: {
     id: 'ollama', name: 'Ollama',
-    baseUrl: 'https://ollama.com/v1',
-    models: ['gpt-oss:120b', 'qwen3-vl:235b'],
-    enabledModels: []
+    baseUrl: 'http://localhost:11434/v1',
+    models: []
   },
   openclaw: {
     id: 'openclaw', name: 'OpenClaw',
     baseUrl: 'ws://127.0.0.1:18789',
-    models: ['openclaw:main'],
+    models: ['openclaw'],
     enabledModels: [],
     isOpenClaw: true
   },
   openai: {
     id: 'openai', name: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
-    models: ['o3-mini', 'o1-mini', 'o1', 'o1-preview', 'gpt-4o-mini', 'gpt-4o-2024-11-20']
+    models: ['gpt-5.4-mini', 'gpt-5.4']
   },
   openrouter: {
     id: 'openrouter', name: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
-    models: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.5-pro', 'deepseek/deepseek-chat']
+    models: ['anthropic/claude-sonnet-4.6', 'deepseek/deepseek-chat']
   },
   qwen: {
     id: 'qwen', name: 'Qwen',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    models: ['qwen3-max', 'qwen-flash'],
-    enabledModels: [],
+    models: ['qwen3-max', 'qwen-plus'],
     supportsThinking: true,
     defaultEnableThinking: false
   }

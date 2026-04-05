@@ -573,8 +573,8 @@ const GLOBAL_PAGE_ORIGINS = ['https://*/*','http://*/*'];
 /* ---- Custom dialog helpers (replaces native confirm/alert) ---- */
 function _spDialog(msg, isConfirm){
   return new Promise(resolve=>{
-    const okText   = sp_t('ok')     || '確定';
-    const cancelText = sp_t('cancel') || '取消';
+    const okText   = sp_t('ok')     || 'OK';
+    const cancelText = sp_t('cancel') || 'Cancel';
     const ov=document.createElement('div');
     ov.className='custom-dialog-overlay';
     ov.innerHTML=`<div class="custom-dialog-box"><p class="custom-dialog-msg">${escapeHtml(String(msg))}</p><div class="custom-dialog-actions">${isConfirm?`<button class="custom-dialog-btn custom-dialog-btn-cancel">${escapeHtml(cancelText)}</button>`:''}<button class="custom-dialog-btn custom-dialog-btn-ok">${escapeHtml(okText)}</button></div></div>`;
@@ -925,6 +925,17 @@ function bindEvents(){
       }
       if(changes.customModels || changes.model) loadModels();
       if(changes.apiKey) missingApiAlerted=false;
+      // OpenClaw: auto-reload history when sessionKey changes
+      if(changes.providerConfigs){
+        const oldCfg = changes.providerConfigs.oldValue || {};
+        const newCfg = changes.providerConfigs.newValue || {};
+        const oldOC = oldCfg.openclaw || {};
+        const newOC = newCfg.openclaw || {};
+        if(newOC.isOpenClaw && newOC.sessionKey && newOC.sessionKey !== oldOC.sessionKey){
+          console.log('[SP] OpenClaw sessionKey changed →', newOC.sessionKey);
+          loadAndShowOpenClawHistory().catch(e => console.warn('[SP] auto-reload history failed:', e));
+        }
+      }
       if(changes.webSearchEnabled != null){
         const val = !!changes.webSearchEnabled.newValue;
         console.log('[SP] storage webSearchEnabled changed →', val);
@@ -1956,10 +1967,10 @@ function updatePageContextPreview(){
     if(pageContextMessages.length === 1){
       const msg = pageContextMessages[0];
       const domain = msg.pageUrl ? new URL(msg.pageUrl).hostname : sp_t('unknownSource');
-      const lengthText = `${(totalLength / 1000).toFixed(1)}k 字符`;
+      const lengthText = `${(totalLength / 1000).toFixed(1)}k ${sp_t('chars')}`;
       els.pageContentMeta.textContent = `${domain} • ${lengthText}`;
     } else {
-      const lengthText = `${(totalLength / 1000).toFixed(1)}k 字符`;
+      const lengthText = `${(totalLength / 1000).toFixed(1)}k ${sp_t('chars')}`;
       els.pageContentMeta.textContent = sp_tpl('totalLengthDetails',{length:lengthText});
     }
   }
@@ -1990,7 +2001,7 @@ function showPageContentPreview(title, url, contentLength, fullContent = ''){
   // 設置元數據（URL + 內容長度）
   if(els.pageContentMeta){
     const domain = url ? new URL(url).hostname : sp_t('unknownSource');
-    const lengthText = contentLength ? `${(contentLength / 1000).toFixed(1)}k 字符` : '';
+    const lengthText = contentLength ? `${(contentLength / 1000).toFixed(1)}k ${sp_t('chars')}` : '';
     els.pageContentMeta.textContent = `${domain} • ${lengthText}`;
   }
   
@@ -2050,10 +2061,10 @@ function togglePageContentExpanded(){
         card.className = 'page-card';
         
         const domain = msg.pageUrl ? new URL(msg.pageUrl).hostname : sp_t('unknownSource');
-        const lengthText = msg.content ? `${(msg.content.length / 1000).toFixed(1)}k 字符` : '0k';
+        const lengthText = msg.content ? `${(msg.content.length / 1000).toFixed(1)}k ${sp_t('chars')}` : '0k';
         const title = msg.pageTitle || sp_t('untitledPage');
         
-        card.innerHTML = `<div class="page-card-header"><div class="page-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></div><div class="page-card-info"><div class="page-card-title">${escapeHtml(title.length > 40 ? title.substring(0, 40) + '...' : title)}</div><div class="page-card-meta">${escapeHtml(domain)} • ${lengthText}</div></div><button class="page-card-remove" data-ts="${msg.ts}" title="移除此頁面">✕</button></div>`;
+        card.innerHTML = `<div class="page-card-header"><div class="page-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></div><div class="page-card-info"><div class="page-card-title">${escapeHtml(title.length > 40 ? title.substring(0, 40) + '...' : title)}</div><div class="page-card-meta">${escapeHtml(domain)} • ${lengthText}</div></div><button class="page-card-remove" data-ts="${msg.ts}" title="${sp_t('removePage')}">✕</button></div>`;
         
         // 添加移除按鈕的事件監聽
         const removeBtn = card.querySelector('.page-card-remove');
@@ -2209,14 +2220,14 @@ async function handlePageContextToggle(){
     }
     
     const tab=await getActiveTab();
-    if(!tab?.id) throw new Error('找不到目前分頁');
+    if(!tab?.id) throw new Error('Tab not found');
     if(!isSupportedPageUrl(tab.url)) throw new Error('PAGE_UNREADABLE'); // sentinel — matched in flagPageContextError
     
     // 更新按鈕狀態：顯示正在捕獲
     if(btn){
       btn.classList.add('active');
       const lang = awaitGetZhVariant.cached || _defaultLang();
-      const tip = window.__t ? window.__t('capturingPage', lang) : '捕獲中（點擊終止）';
+      const tip = window.__t ? window.__t('capturingPage', lang) : 'Capturing (click to stop)';
       setButtonTooltip(btn, tip);
       btn.setAttribute('aria-label', tip);
       console.log('[pageContext] 🎯 Tooltip set to:', tip, 'data-tooltip:', btn.getAttribute('data-tooltip'));
@@ -2254,11 +2265,11 @@ async function handlePageContextToggle(){
           const MAX_PAGE_CONTEXTS = 5;
           if(pageContextMessages.length >= MAX_PAGE_CONTEXTS){
             const lang = awaitGetZhVariant.cached || _defaultLang();
-            const limitMsg = window.__t ? window.__t('pageContextLimitReached', lang) : '已達到引用頁面數量上限';
-            showToast(`${limitMsg}（${MAX_PAGE_CONTEXTS} ${lang === 'en' ? 'pages' : '個'}）`);
+            const limitMsg = window.__t ? window.__t('pageContextLimitReached', lang) : 'Page reference limit reached';
+            showToast(`${limitMsg} (${MAX_PAGE_CONTEXTS})`);
             if(btn){
               btn.classList.remove('active');
-              const refPageText = window.__t ? window.__t('referencePage', lang) : '引用頁面';
+              const refPageText = window.__t ? window.__t('referencePage', lang) : 'Reference Page';
               setButtonTooltip(btn, refPageText);
               btn.setAttribute('aria-label', refPageText);
             }
@@ -2315,7 +2326,7 @@ async function handlePageContextToggle(){
       if(btn){
         btn.classList.remove('active');
         const lang = awaitGetZhVariant.cached || _defaultLang();
-        const refPageText = window.__t ? window.__t('referencePage', lang) : '引用頁面';
+        const refPageText = window.__t ? window.__t('referencePage', lang) : 'Reference Page';
         setButtonTooltip(btn, refPageText);
         btn.setAttribute('aria-label', refPageText);
       }
@@ -2335,7 +2346,7 @@ async function handlePageContextToggle(){
       if(btn){
         btn.classList.remove('active');
         const lang = awaitGetZhVariant.cached || _defaultLang();
-        const refPageText = window.__t ? window.__t('referencePage', lang) : '引用頁面';
+        const refPageText = window.__t ? window.__t('referencePage', lang) : 'Reference Page';
         setButtonTooltip(btn, refPageText);
         btn.setAttribute('aria-label', refPageText);
       }
@@ -2351,11 +2362,11 @@ async function handlePageContextToggle(){
 // 使用 Readability 進行智能內容提取
 async function captureWithReadability(){
   const tab = await getActiveTab();
-  if(!tab?.id) throw new Error('找不到目前分頁');
-  if(!isSupportedPageUrl(tab.url)) throw new Error('此頁面不支援擷取');
+  if(!tab?.id) throw new Error('Tab not found');
+  if(!isSupportedPageUrl(tab.url)) throw new Error('Page not supported for capture');
   
   const globalGranted = await ensureGlobalPagePermission({ requestIfNeeded:false });
-  if(!globalGranted) throw new Error('未授權讀取此頁面');
+  if(!globalGranted) throw new Error('Not authorized to read this page');
   
   console.log('[Readability] Starting intelligent content extraction...');
   
@@ -2396,7 +2407,7 @@ async function captureWithReadability(){
     }
   });
   
-  if(!htmlString) throw new Error('無法獲取頁面 HTML');
+  if(!htmlString) throw new Error('Failed to get page HTML');
   
   console.log('[Readability] HTML obtained, length:', htmlString.length);
   
@@ -2405,7 +2416,7 @@ async function captureWithReadability(){
   const dom = parser.parseFromString(htmlString, 'text/html');
   
   if(!dom || dom.documentElement.nodeName === 'parsererror'){
-    throw new Error('HTML 解析失敗');
+    throw new Error('HTML parse failed');
   }
   
   // 使用 Readability 提取主要內容
@@ -2536,12 +2547,12 @@ async function captureWithReadability(){
 // 智能滾動捕獲（針對虛擬滾動網站）
 async function captureWithSmartScroll(){
   const tab=await getActiveTab();
-  if(!tab?.id) throw new Error('找不到目前分頁');
-  if(!isSupportedPageUrl(tab.url)) throw new Error('此頁面不支援擷取');
+  if(!tab?.id) throw new Error('Tab not found');
+  if(!isSupportedPageUrl(tab.url)) throw new Error('Page not supported for capture');
   
   const globalGranted=await ensureGlobalPagePermission({ requestIfNeeded:false });
-  if(!globalGranted) throw new Error('未授權讀取此頁面');
-  if(!chrome.scripting?.executeScript) throw new Error('瀏覽器版本不支援擷取頁面');
+  if(!globalGranted) throw new Error('Not authorized to read this page');
+  if(!chrome.scripting?.executeScript) throw new Error('Browser version does not support page capture');
 
   const settings = await chrome.storage.local.get(['pageContextLimit']);
   const bodyLimit = settings.pageContextLimit || PAGE_CONTEXT_BODY_MAX;
@@ -2729,7 +2740,7 @@ async function captureWithSmartScroll(){
     args:[bodyLimit]
   });
 
-  if(!result) throw new Error('未能擷取內容');
+  if(!result) throw new Error('Failed to capture content');
   
   console.log('[smartScroll] 📦 Raw result:', {
     hasTitle: !!result.title,
@@ -2791,8 +2802,8 @@ async function captureWithSmartScroll(){
 
 async function capturePageContext(){
   const tab=await getActiveTab();
-  if(!tab?.id) throw new Error('找不到目前分頁');
-  if(!isSupportedPageUrl(tab.url)) throw new Error('此頁面不支援擷取');
+  if(!tab?.id) throw new Error('Tab not found');
+  if(!isSupportedPageUrl(tab.url)) throw new Error('Page not supported for capture');
   
   // 記錄引用的頁面 URL（每次捕獲時更新）
   lastCapturedPageUrl = tab.url;
@@ -2818,8 +2829,8 @@ async function capturePageContext(){
   }
   
   const globalGranted=await ensureGlobalPagePermission({ requestIfNeeded:false });
-  if(!globalGranted) throw new Error('未授權讀取此頁面');
-  if(!chrome.scripting?.executeScript) throw new Error('瀏覽器版本不支援擷取頁面');
+  if(!globalGranted) throw new Error('Not authorized to read this page');
+  if(!chrome.scripting?.executeScript) throw new Error('Browser version does not support page capture');
 
   const { pageCaptureInclude, pageCaptureExclude, pageContextLimit } = await chrome.storage.sync.get(['pageCaptureInclude','pageCaptureExclude','pageContextLimit']);
   
@@ -3174,7 +3185,7 @@ async function capturePageContext(){
     args:[bodyLimit, PAGE_CONTEXT_SELECTION_MAX, mode, includeSelector, excludeSelectors]
   });
 
-  if(!result) throw new Error('找不到可用的頁面文字');
+  if(!result) throw new Error('No readable text found on page');
   
   // 如果返回的是 HTML（full 模式），轉換為 Markdown
   if(result.bodyHTML){
@@ -3322,7 +3333,7 @@ async function loadSessions(){
     const d=await chrome.storage.local.get(['chatSessions','currentSessionId']);
     sessions=d.chatSessions||[];
     currentSessionId=d.currentSessionId||null;
-  }catch(e){ showFatal('讀取對話失敗', e); }
+  }catch(e){ showFatal('Failed to load chats', e); }
 }
 function ensureSession(){
   if(!currentSessionId || !sessions.some(s=>s.id===currentSessionId)){
@@ -3346,7 +3357,7 @@ function createNewSession(silent=false){
     }
   }
   const id=Date.now().toString();
-  sessions.unshift({ id, title:'新對話', createdAt:Date.now(), messages:[] });
+  sessions.unshift({ id, title:'New Chat', createdAt:Date.now(), messages:[] });
   currentSessionId=id;
   persistSessions();
   if(!silent){
@@ -3791,7 +3802,7 @@ function renderMessage(msg){
           const img = document.createElement('img');
           img.className = 'message-image';
           img.src = part.image_url.url;
-          img.alt = '上傳的圖片';
+          img.alt = 'Uploaded image';
           img.onclick = ()=>{
             // 點擊圖片放大顯示
             const modal = document.createElement('div');
@@ -3836,7 +3847,7 @@ function renderMessage(msg){
         const imgEl = document.createElement('img');
         imgEl.className = 'message-image';
         imgEl.src = `data:${img.type};base64,${img.data}`;
-        imgEl.alt = img.name || '上傳的圖片';
+        imgEl.alt = img.name || 'Uploaded image';
         imgEl.onclick = ()=>{
           const modal = document.createElement('div');
           modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;';
@@ -3901,8 +3912,8 @@ function renderMessage(msg){
     attachmentsContainer.className = 'message-attachments';
     
     const lang = (awaitGetZhVariant.cached) || _defaultLang();
-    const labelText = typeof window.__t === 'function' ? window.__t('pageReferenced', lang) : '引用頁面';
-    const titleText = typeof window.__t === 'function' ? window.__t('referencePage', lang) : '引用頁面';
+    const labelText = typeof window.__t === 'function' ? window.__t('pageReferenced', lang) : 'Reference Page';
+    const titleText = typeof window.__t === 'function' ? window.__t('referencePage', lang) : 'Reference Page';
     
     const pageIndicator = document.createElement('div');
     pageIndicator.className = 'message-attachment-indicator';
@@ -4001,12 +4012,7 @@ function buildMessageActions(msg){
   
   // 依系統／瀏覽器語言回傳「圖片」佔位符（複製時用）
   function getImagePlaceholder() {
-    const lang = (typeof chrome !== 'undefined' && chrome.i18n?.getUILanguage?.()
-      ? chrome.i18n.getUILanguage()
-      : navigator.language || navigator.userLanguage || ''
-    ).toLowerCase();
-    if (lang.startsWith('zh')) return '[圖片]';
-    return '[Image]';
+    return '[' + sp_t('image') + ']';
   }
 
   // 將訊息內容轉為純文字（供複製／token 估算）：多模態時圖片以佔位符替代，避免 [object Object]
@@ -4060,7 +4066,7 @@ function buildMessageActions(msg){
         
         // 添加頁面內容附件按鈕到操作欄（類似截圖中的附件圖標）
         const pageIcon = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
-        const tooltipText = hasWarning ? '查看引用內容（可能不完整）' : '查看引用內容';
+        const tooltipText = hasWarning ? sp_t('viewRefContentIncomplete') : sp_t('viewRefContent');
         bar.appendChild(btn(pageIcon, tooltipText, () => showPageContextModal(pageContextMessages)));
       }
     }
@@ -4222,7 +4228,7 @@ function editUserMessage(msg){
         const imgEl = document.createElement('img');
         imgEl.src = `data:${img.type};base64,${img.data}`;
         imgEl.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
-        imgEl.alt = img.name || '圖片';
+        imgEl.alt = img.name || 'Image';
         
         const removeBtn = document.createElement('button');
         removeBtn.textContent = '×';
@@ -4307,7 +4313,7 @@ function editUserMessage(msg){
       const imgEl = document.createElement('img');
       imgEl.src = `data:${img.type};base64,${img.data}`;
       imgEl.style.cssText = 'width: 100%; height: 100%; object-fit: cover;';
-      imgEl.alt = img.name || '圖片';
+      imgEl.alt = img.name || 'Image';
       
       const removeBtn = document.createElement('button');
       removeBtn.textContent = '×';
@@ -4510,7 +4516,7 @@ async function submitEditedUserMessage(msg, newContent, editedImages = []){
   try{
     await streamChatCompletion(ts);
   }catch(e){
-    const errHtml = escapeHtml('（錯誤）'+formatErrorMessage(e));
+    const errHtml = escapeHtml(sp_t('errorPrefix')+formatErrorMessage(e));
     replaceMessageContent(ts, errHtml);
     // Add inline retry button to the error message
     setTimeout(()=>{
@@ -4548,7 +4554,7 @@ async function retryAssistant(msg){
   try{
     await streamChatCompletion(ts);
   }catch(e){
-    replaceMessageContent(ts,'（重試失敗）'+formatErrorMessage(e));
+    replaceMessageContent(ts,sp_t('retryFailed')+formatErrorMessage(e));
   }finally{
     streaming=false; finalizeStreamingMessage(ts); setSendButtonState();
   }
@@ -4944,13 +4950,13 @@ function showWebSearchModal(results, query){
     <div class="page-context-modal-overlay"></div>
     <div class="page-context-modal-content">
       <div class="page-context-modal-header">
-        <h3>🔍 ${sp_t('searchSources') || '搜尋來源'}</h3>
+        <h3>🔍 ${sp_t('searchSources') || 'Search Sources'}</h3>
         <button class="page-context-modal-close" type="button" aria-label="${sp_t('close')}">✕</button>
       </div>
       <div class="page-context-modal-body">
         <div class="page-context-stats">
-          <span>${sp_t('searchQuery') || '搜尋'}: ${escapeHtml(query || '')}</span>
-          <span>${results.length} ${sp_t('webSearchResultCount') || '筆結果'}</span>
+          <span>${sp_t('searchQuery') || 'Search'}: ${escapeHtml(query || '')}</span>
+          <span>${results.length} ${sp_t('webSearchResultCount') || 'results'}</span>
         </div>
         <div class="web-search-results-list">
           ${resultCards}
@@ -5246,15 +5252,15 @@ async function onSend(){
   console.log('[SP] Session OK, proceeding...');
 
   // 設定會話標題
-  if(session.title==='新對話'){
+  if(session.title==='New Chat' || session.title==='新對話' || session.title==='新对话'){
     if(text){
       session.title = text.slice(0,16);
     } else if(uploadedImages.length > 0){
-      session.title = '圖片'; // sentinel translated at render time
+      session.title = 'Image'; // sentinel translated at render time
     } else if(hasPendingPageContent){
-      session.title = '頁面內容'; // sentinel translated at render time
+      session.title = 'Page Content'; // sentinel translated at render time
     } else {
-      session.title = '新對話'; // sentinel translated at render time
+      session.title = 'New Chat'; // sentinel translated at render time
     }
   }
   
@@ -5328,7 +5334,7 @@ async function onSend(){
     await streamChatCompletion(ts);
   }catch(e){
     console.error('[SP] Stream error:', e);
-    replaceMessageContent(ts,'（錯誤）'+formatErrorMessage(e));
+    replaceMessageContent(ts,sp_t('errorPrefix')+formatErrorMessage(e));
   }finally{
     stopStreamingScroll();
     streaming=false; finalizeStreamingMessage(ts); setSendButtonState();
@@ -5465,7 +5471,7 @@ async function streamChatCompletion(assistantTs){
   showThinkingDots(assistantTs, '');
 
   const hasPerm=await guardHostPermission(apiEndpoint);
-  if(!hasPerm) throw new Error('尚未取得 Proxy 主機權限，請在設定頁授權。');
+  if(!hasPerm) throw new Error(sp_t('proxyPermissionNeeded'));
 
   const session=getCurrentSession();
   
@@ -5600,7 +5606,7 @@ async function streamChatCompletion(assistantTs){
   }catch(e){
     console.error('[SP] Fetch error:', e);
     hideThinkingDots(assistantTs);
-    throw new Error('連線失敗：'+e.message);
+    throw new Error('Connection failed: '+e.message);
   }
 
   if(!resp.ok){
@@ -5826,10 +5832,10 @@ function finalizeStreamingMessage(ts){
 }
 function formatErrorMessage(e){
   const msg=e && e.message ? e.message : String(e);
-  if(/尚未設定 API Key/.test(msg)) return '尚未設定 API Key。';
-  if(/權限/.test(msg)) return msg;
-  if(/Failed to fetch|連線失敗/.test(msg)) return msg+'\n可能：Proxy 不可達 / CORS / 網路中斷。';
-  if(/401/.test(msg)) return msg+'\nAPI Key 無效或 Proxy 尚未正確轉發 Authorization Header。';
+  if(/API Key not set|尚未設定 API Key/.test(msg)) return sp_t('apiKeyNotSet');
+  if(/權限|permission/i.test(msg)) return msg;
+  if(/Failed to fetch|連線失敗|Connection failed/.test(msg)) return msg+'\n'+sp_t('proxyUnreachableHint');
+  if(/401/.test(msg)) return msg+'\n'+sp_t('invalidApiKeyHint');
   return msg;
 }
 

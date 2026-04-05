@@ -27,6 +27,9 @@ research/
 # Backups (use git history instead)
 backup/
 
+# Dev notes (internal technical references)
+dev-notes/
+
 # Icon source / animation assets
 icon/
 animation/

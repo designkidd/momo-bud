@@ -215,7 +215,7 @@ function initFloatball(state){
     const btn = document.createElement('button');
     btn.className = 'momo-float-ball';
     btn.type = 'button';
-    btn.title = '點擊開啟 Momo 側邊欄';
+    btn.title = 'Open Momo sidebar';
     
     const iconUrl = chrome.runtime?.getURL ? chrome.runtime.getURL('assets/icons/momo.png') : null;
     if(iconUrl){
@@ -265,7 +265,7 @@ function initFloatball(state){
     closeBtn.className = 'momo-float-ball-close';
     closeBtn.type = 'button';
     closeBtn.innerHTML = '✕';
-    closeBtn.title = '隱藏懸浮球';
+    closeBtn.title = 'Hide float ball';
     
     container.appendChild(btn);
     container.appendChild(closeBtn);
@@ -484,7 +484,7 @@ function initFloatball(state){
       // 右上關閉
       const closeBtn = document.createElement('div');
       closeBtn.className = 'momo-sidebar-close';
-      closeBtn.title = '關閉';
+      closeBtn.title = 'Close';
       closeBtn.textContent = '✕';
       closeBtn.addEventListener('click', closeSidebar);
       

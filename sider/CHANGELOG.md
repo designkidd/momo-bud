@@ -4,12 +4,133 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.19.5] - 2026-04-06
+### Fixed — 測試連線不再彈出權限請求
+- 將所有內建 AI Provider 的 API 域名加入 `manifest.json` 的 `host_permissions`，包括 DeepSeek、Google AI、MiniMax、Moonshot、NVIDIA、OpenRouter、Qwen
+- 使用者按 Start Test 時不再觸發 Chrome「has requested additional permissions」彈窗
+- 自訂 URL 或 localhost（Ollama / LM Studio）仍會透過 `optional_host_permissions` 動態請求
+
+---
+
+## [2.19.4] - 2026-04-05
+### Changed — OpenClaw 設定頁 UX 重構
+- **Start Test → Connect / Disconnect**：按鈕改為 Connect，連線成功後變為 Disconnect（hover 變紅），點擊可斷開連線
+- **Connected 後自動載入 Session**：Connect 成功後自動呼叫 Load Sessions，不需手動操作
+- **Session 切換自動載入對話記錄**：選擇不同 Session 後，側邊欄自動偵測 `providerConfigs.sessionKey` 變更並載入 `chat.history`
+- **Enabled Models 預設 off**：未 Connected 前 toggle 為 off + disabled，Connected 後自動開啟
+- **Load 按鈕改為 Refresh icon**：Session 旁的 Load 按鈕改為 🔄 refresh icon（`btn btn-outline small`），loading 時旋轉動畫
+- **Setup Guide 移到右側**：與 Connect 按鈕同行，左邊 Connect，右邊 Setup Guide
+- **Enabled Models 標題改為二級標題**：與 Session 一致的 `field-label` 樣式，左對齊
+- **Session 切換提示**：切換 Session 時顯示「切換中…」→「✓ 已切換」狀態提示
+- **Model name 簡化**：`openclaw:main` → `openclaw`（HTML、JS、utils.js）
+
+---
+
+## [2.18.1] - 2026-04-05
+### Changed
+- **OpenClaw 設定頁簡化**：OpenClaw provider 不再顯示完整的 "Enabled Models" 列表和 "Add Model" 按鈕，改為單一 `openclaw:main` 開關；切換回其他 provider 時恢復完整模型列表
+
+---
+
+## [2.17.9] - 2026-04-05
+### Fixed — Provider Hint i18n 完整修復（2.17.5 ~ 2.17.9）
+
+此問題經歷多次迭代才完全修復，記錄根因和陷阱以防再犯：
+
+**問題**：設定頁 Provider Configuration 的 hint（"Leave empty to use default: ..." + "Apply for API Key here: ..."）在初始載入或切換語言時顯示不正確。
+
+**根因分析（共 4 層）**：
+
+1. **`data-i18n` 覆蓋動態內容（2.17.6）**
+   - `providerBaseUrlHint` 有 `data-i18n="useDefaultUrl"`，i18n-loader 的 `__applyTranslations()` 會把 JS 動態生成的 innerHTML（含 URL + `<a>` 連結）覆蓋回簡單的翻譯字串
+   - ✅ 修復：移除 HTML 中的 `data-i18n`，讓 JS 完全控制 hint 內容
+
+2. **`currentLang` 設定時序（2.17.7）**
+   - `loadProviderConfig` 的 i18n 重新呼叫在 `currentLang` 設定之前執行，`t()` 使用 fallback `'en'`
+   - ✅ 修復：把重新呼叫移到 `await __applyTranslations(lang)` 完成且 `currentLang` 已設定之後
+
+3. **語言切換未觸發 hint 更新（2.17.8）**
+   - 切換語言時只呼叫了 `applyLanguageConversion()`，沒有重新呼叫 `loadProviderConfig`
+   - ✅ 修復：語言切換 callback 中加入 `await applyLanguageConversion()` + `loadProviderConfig()`
+
+4. **`applyLanguageConversion` 的 async 陷阱（2.17.9）**
+   - 函數標記為 `async` 但內部用 `chrome.storage.local.get(key, callback)` — callback 模式不會被 `await` 等待，Promise 立即 resolve
+   - ✅ 修復：改用 `await chrome.storage.local.get(key)`（MV3 Promise API），讓 `await` 真正等待完成
+
+**設計原則（避免再犯）**：
+- 動態生成的 UI 內容不要加 `data-i18n`，否則 i18n-loader 會覆蓋
+- 依賴 i18n 翻譯的 UI 更新必須在 `__applyTranslations()` 完成後執行
+- MV3 中 `chrome.storage` API 優先用 Promise 版本，避免 callback + async 的陷阱
+- 語言切換時，所有 JS 動態生成的 i18n 內容都需要手動重新渲染
+
+---
+
+## [2.17.3] - 2026-04-05
+### Added
+- **所有雲端 Provider 加入 API Key 申請連結**：新增 Moonshot、NVIDIA、MiniMax、OpenRouter 的 API Key 申請頁面連結（LM Studio、Ollama、OpenClaw 為本地服務，不需要）
+
+---
+
+## [2.17.2] - 2026-04-05
+### Changed
+- **所有 AI Provider 預設模型精簡為兩個主流模型**（全部預設關閉）：
+  - DeepSeek: `deepseek-chat`, `deepseek-reasoner`
+  - Google AI: `gemini-2.5-flash`, `gemini-2.5-pro`
+  - MiniMax: `MiniMax-Text-01`, `abab6.5s-chat`
+  - Moonshot: `kimi-k2.5`, `kimi-k2`
+  - NVIDIA: `nemotron-3-super-120b-a12b`, `nemotron-3-nano-30b-a3b`
+  - OpenAI: `gpt-5.4-mini`, `gpt-5.4`
+  - OpenRouter: `anthropic/claude-sonnet-4.6`, `deepseek/deepseek-chat`
+  - Qwen: `qwen3-max`, `qwen-plus`
+  - Ollama: 清空預設（本地模型由使用者自行新增）
+  - LM Studio / OpenClaw: 不變
+
+---
+
+## [2.17.1] - 2026-04-05
+### Fixed
+- **「載入」按鈕中文未 i18n**：`options.html` 中 OpenClaw Session 的「載入」按鈕和 placeholder 文字改為英文預設並加上 `data-i18n="loadSessions"`，中文系統由 i18n-loader 自動替換
+
+---
+
+## [2.17.0] - 2026-04-05
+### Changed
+- **全面 i18n 國際化**：移除所有 JS 檔案中的 hardcoded 中文字串（約 50+ 處），改用 i18n key 或英文 fallback
+  - `js/openclaw.js`：5 處錯誤訊息改為英文
+  - `sidepanel.js`：OpenClaw 錯誤、頁面引用 UI、session 標題、圖片 alt、搜尋結果、格式化錯誤訊息等
+  - `options.js`：按鈕文字、WebSocket 錯誤、TTS 預覽 fallback 等
+  - `content-floatball.js`：3 個 tooltip 改為英文
+- **i18n JSON 新增 25 個 key**（`en.json`、`hant.json`、`hans.json` 三語同步）
+
+### Fixed
+- **英文系統不再顯示中文錯誤訊息**：如「載入失敗」「連線逾時」「無可用 Session」等
+
+---
+
 ## [2.16.5] - 2026-04-05
 ### Fixed
 - **OpenClaw 回覆太慢導致「未回應」問題**：
   - `chat.send` RPC 超時從 30 秒增加到 60 秒
   - `chat.send` 超時時若事件流已有回應，不再直接結束，繼續等待回覆
   - 新增輪詢穩定檢查：備用輪詢取得回覆後若 15 秒內無新內容變化，自動視為完成
+
+---
+
+## [2.16.4] - 2026-04-05
+### Changed
+- **移除 hardcoded API Key**：NVIDIA、Ollama、Qwen 的 `defaultApiKey` 和 `enforceDefaultEnabled` 已移除，所有模型預設為關閉
+
+---
+
+## [2.16.3] - 2026-04-05
+### Changed
+- **模型選擇器固定寬度**：`#modelSelector` 寬度固定為 160px，不再隨模型名稱長度變動
+
+---
+
+## [2.16.2] - 2026-04-05
+### Changed
+- **按鈕順序調整**：Upload Image 和 Reference Page 按鈕位置互換（圖片上傳在前）
 
 ---
 

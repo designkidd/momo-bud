@@ -191,24 +191,27 @@
         <div class="form-field">
           <label class="field-label" for="providerBaseUrl" data-i18n="apiBaseUrl">API Base URL（可選）</label>
           <input id="providerBaseUrl" type="text" class="input" data-i18n-placeholder="useDefaultUrl" placeholder="使用默認 URL">
-          <p class="hint" id="providerBaseUrlHint" data-i18n="useDefaultUrl">不填則使用默認 URL</p>
+          <p class="hint" id="providerBaseUrlHint"></p>
         </div>
 
-        <!-- API Key -->
+        <!-- API Key (label changes to "Gateway Token" for OpenClaw via JS) -->
         <div class="form-field">
           <label class="field-label" for="providerApiKey" data-i18n="apiKey">API Key</label>
           <div class="inline-row">
             <input id="providerApiKey" type="password" class="input" data-i18n-placeholder="enterApiKey" placeholder="請輸入 API Key">
             <button id="btnToggleProviderKey" class="btn btn-outline small" data-i18n="showKey">顯示</button>
           </div>
-        </div>
-
-        <!-- OpenClaw Tutorial Button (only shown for OpenClaw provider) -->
-        <div id="openclawTutorialField" class="form-field hidden">
-          <button id="btnOpenClawTutorial" class="btn btn-outline small openclaw-tutorial-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span data-i18n="openclawTutorial">設定教學</span>
-          </button>
+          <!-- OpenClaw: Start Test + Setup Guide inline row (no heading) -->
+          <div id="openclawTestRow" class="openclaw-action-row hidden" style="margin-top:8px;">
+            <div class="openclaw-action-left">
+              <button id="btnTestConnectionOC" class="btn btn-outline small" data-i18n="openclawConnect">Connect</button>
+              <span id="testStatusOC" class="inline-status" aria-live="polite"></span>
+            </div>
+            <button id="btnOpenClawTutorial" class="btn btn-outline small openclaw-tutorial-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span data-i18n="openclawTutorial">設定教學</span>
+            </button>
+          </div>
         </div>
 
         <!-- OpenClaw Session Select (only shown for OpenClaw provider) -->
@@ -216,22 +219,39 @@
           <label class="field-label" for="openclawSessionKey">Session</label>
           <div class="inline-row">
             <select id="openclawSessionKey" class="input">
-              <option value="">-- 請點擊「載入」以列出 Sessions --</option>
+              <option value="">-- Connect to load Sessions --</option>
             </select>
-            <button id="btnLoadSessions" class="btn btn-outline small">載入</button>
+            <button id="btnLoadSessions" class="btn btn-outline small btn-refresh" data-i18n-title="refreshSessions" title="重新整理">
+              <svg class="refresh-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/><path d="M2 11.5a10 10 0 0 1 18.8-4.3L21.5 8"/><path d="M22 12.5a10 10 0 0 1-18.8 4.2L2.5 16"/></svg>
+            </button>
           </div>
           <p class="hint" id="openclawSessionKeyHint" data-i18n="openclawSessionKeyHint">選擇 OpenClaw Gateway Session 以路由到指定 Agent。</p>
+          <span id="sessionSwitchStatus" class="inline-status" aria-live="polite"></span>
         </div>
 
         <!-- Thinking Mode Toggle (per-model, moved to model row) -->
 
         <!-- Test Connection -->
-        <div class="form-field">
+        <div class="form-field" id="testConnectionField">
           <h3 class="sub-heading" data-i18n="testConnection">測試連線</h3>
           <p class="hint" data-i18n="testConnectionHint">檢查 API Key / Proxy 是否有效（會自動授權 host）。</p>
           <div class="test-row">
             <button id="btnTestConnection" class="btn btn-outline small" data-i18n="startTest">開始測試</button>
             <span id="testStatus" class="inline-status" aria-live="polite"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- OpenClaw Simple Toggle (shown only for OpenClaw provider) -->
+      <section id="sec-openclaw-toggle" class="section hidden">
+        <div class="form-field">
+          <label class="field-label" data-i18n="enabledModels">啟用模型</label>
+          <div class="model-row" style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-subtle);border-radius:12px;">
+            <span style="flex:1;font-size:14px;font-weight:500;color:var(--text);">openclaw</span>
+            <label class="switch" style="margin:0;">
+              <input type="checkbox" id="openclawModelToggle">
+              <span class="slider"></span>
+            </label>
           </div>
         </div>
       </section>

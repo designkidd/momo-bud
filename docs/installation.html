@@ -107,8 +107,13 @@
 </table>
 
 <div class="callout info">
+  <strong>ℹ️ 內建 Host 權限</strong>
+  所有內建 AI 供應商的 API 域名（OpenAI、Google AI、DeepSeek、Qwen、OpenRouter、Moonshot、MiniMax、NVIDIA）已預先加入 <code>host_permissions</code>，測試連線時不會彈出額外的權限請求。
+</div>
+
+<div class="callout info">
   <strong>ℹ️ 可選權限</strong>
-  首次使用自訂 API 端點時，可能會請求額外的 Host 權限（<code>http(s)://*/*</code>），以連接你的自訂 AI 伺服器。
+  首次使用自訂 API 端點或本地服務（Ollama / LM Studio）時，可能會透過 <code>optional_host_permissions</code> 請求額外的 Host 權限。
 </div>
 
 <nav class="page-nav">
