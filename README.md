@@ -8,7 +8,8 @@
 
 ## ✨ Features
 
-- 🤖 11+ AI providers (OpenAI, Google Gemini, DeepSeek, Qwen, Ollama, LM Studio, OpenRouter, NVIDIA, Groq, MiniMax, Moonshot, OpenClaw, Custom)
+- 🤖 11+ AI providers (OpenAI, Google Gemini, DeepSeek, Qwen, Ollama, LM Studio, OpenRouter, NVIDIA, Groq, MiniMax, Moonshot, Custom)
+- 🧪 OpenClaw (Beta) — WebSocket AI gateway for local device-to-device communication
 - 💬 Sidebar chat interface
 - 🎈 Floating ball for quick access
 - 📄 Web page capture & reference

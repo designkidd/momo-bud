@@ -8,7 +8,8 @@
 
 ## ✨ 功能
 
-- 🤖 支援 11+ AI 供應商（OpenAI、Google Gemini、DeepSeek、Qwen、Ollama、LM Studio、OpenRouter、NVIDIA、Groq、MiniMax、Moonshot、OpenClaw、自訂）
+- 🤖 支援 11+ AI 供應商（OpenAI、Google Gemini、DeepSeek、Qwen、Ollama、LM Studio、OpenRouter、NVIDIA、Groq、MiniMax、Moonshot、自訂）
+- 🧪 OpenClaw（Beta）— WebSocket AI 閘道器，支援本地裝置間通訊
 - 💬 側邊欄聊天介面
 - 🎈 浮球快速啟動
 - 📄 網頁內容擷取與引用
