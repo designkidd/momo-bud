@@ -6,22 +6,20 @@
 
 ![Momo AI Screenshot](docs/momo-preview.png)
 
-📖 **Full documentation**: [designkidd.github.io](https://designkidd.github.io) — setup guides, feature walkthroughs, provider configs, and more.
+## ✨ Features
 
-## Features
-
-- 11+ AI providers (OpenAI, Google Gemini, DeepSeek, Qwen, Ollama, LM Studio, OpenRouter, NVIDIA, Groq, MiniMax, Moonshot, OpenClaw, Custom)
-- Sidebar chat interface
-- Floating ball for quick access
-- Web page capture & reference
-- Web search (DuckDuckGo, Brave, Tavily)
-- Image upload & vision
-- Thinking mode (Thinking / Reasoning)
-- Text-to-Speech (TTS)
-- Custom system prompts
-- Chat history management
-- Multi-language UI (繁中 / 簡中 / English)
-- Keyboard shortcuts
+- 🤖 11+ AI providers (OpenAI, Google Gemini, DeepSeek, Qwen, Ollama, LM Studio, OpenRouter, NVIDIA, Groq, MiniMax, Moonshot, OpenClaw, Custom)
+- 💬 Sidebar chat interface
+- 🎈 Floating ball for quick access
+- 📄 Web page capture & reference
+- 🔍 Web search (DuckDuckGo, Brave, Tavily)
+- 🖼️ Image upload & vision
+- 💡 Thinking mode (Thinking / Reasoning)
+- 🔊 Text-to-Speech (TTS)
+- 📝 Custom system prompts
+- 🗂️ Chat history management
+- 🌐 Multi-language UI (繁中 / 簡中 / English)
+- ⌨️ Keyboard shortcuts
 
 ## 🆓 Free API Providers
 
@@ -36,42 +34,42 @@ No credit card needed. Get started in minutes:
 
 > **Base URLs**: Ollama Cloud `https://ollama.com/v1` · Google AI `https://generativelanguage.googleapis.com/v1beta` · Groq `https://api.groq.com/openai/v1` · NVIDIA `https://integrate.api.nvidia.com/v1`
 
-## Installation
+## 📦 Installation
 
 ### From Release
 
-1. Download the latest `momo-ai-*-chrome.zip` from [Releases](https://github.com/designkidd/momo-bud/releases)
-2. Unzip the file
-3. Open Chrome, go to `chrome://extensions/`
-4. Enable "Developer mode"
-5. Click "Load unpacked" and select the unzipped folder
-6. Click the Momo icon in the toolbar to start
+1. 📥 Download the latest `momo-ai-*-chrome.zip` from [Releases](https://github.com/designkidd/momo-bud/releases)
+2. 📂 Unzip the file
+3. 🌐 Open Chrome, go to `chrome://extensions/`
+4. 🔧 Enable "Developer mode"
+5. 📁 Click "Load unpacked" and select the unzipped folder
+6. 🐹 Click the Momo icon in the toolbar to start
 
 ### From Source
 
-1. Clone this repo
-2. Open Chrome, go to `chrome://extensions/`
-3. Enable "Developer mode"
-4. Click "Load unpacked" and select the `sider/` folder
+1. 🔗 Clone this repo
+2. 🌐 Open Chrome, go to `chrome://extensions/`
+3. 🔧 Enable "Developer mode"
+4. 📁 Click "Load unpacked" and select the `sider/` folder
 
-## Documentation
+## 📖 Documentation
 
-📖 [designkidd.github.io](https://designkidd.github.io)
+👉 [designkidd.github.io](https://designkidd.github.io)
 
-## Project Structure
+## 🗂️ Project Structure
 
 ```
-sider/              # Chrome extension source
-├── manifest.json   # MV3 manifest
-├── background.js   # Service worker
-├── sidepanel.*     # Sidebar UI
-├── options.*       # Settings page
-├── assets/         # Icons, i18n translations
-├── js/             # Core modules
-└── libs/           # Third-party libraries
-docs/               # Documentation site
+sider/              # 🧩 Chrome extension source
+├── manifest.json   # 📋 MV3 manifest
+├── background.js   # ⚙️ Service worker
+├── sidepanel.*     # 💬 Sidebar UI
+├── options.*       # 🔧 Settings page
+├── assets/         # 🎨 Icons, i18n translations
+├── js/             # 🧠 Core modules
+└── libs/           # 📚 Third-party libraries
+docs/               # 📖 Documentation site
 ```
 
-## License
+## 📄 License
 
 MIT License

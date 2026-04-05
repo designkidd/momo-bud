@@ -6,22 +6,20 @@
 
 ![Momo AI 截圖](docs/momo-preview.png)
 
-📖 **完整說明文件**：[designkidd.github.io](https://designkidd.github.io) — 安裝指南、功能介紹、供應商設定、更新日誌等。
+## ✨ 功能
 
-## 功能
-
-- 支援 11+ AI 供應商（OpenAI、Google Gemini、DeepSeek、Qwen、Ollama、LM Studio、OpenRouter、NVIDIA、Groq、MiniMax、Moonshot、OpenClaw、自訂）
-- 側邊欄聊天介面
-- 浮球快速啟動
-- 網頁內容擷取與引用
-- 聯網搜尋（DuckDuckGo、Brave、Tavily）
-- 圖片上傳與理解
-- 思考模式（Thinking / Reasoning）
-- 語音朗讀（TTS）
-- 自訂系統提示詞
-- 聊天記錄管理
-- 多語言介面（繁中 / 簡中 / English）
-- 快捷鍵支援
+- 🤖 支援 11+ AI 供應商（OpenAI、Google Gemini、DeepSeek、Qwen、Ollama、LM Studio、OpenRouter、NVIDIA、Groq、MiniMax、Moonshot、OpenClaw、自訂）
+- 💬 側邊欄聊天介面
+- 🎈 浮球快速啟動
+- 📄 網頁內容擷取與引用
+- 🔍 聯網搜尋（DuckDuckGo、Brave、Tavily）
+- 🖼️ 圖片上傳與理解
+- 💡 思考模式（Thinking / Reasoning）
+- 🔊 語音朗讀（TTS）
+- 📝 自訂系統提示詞
+- 🗂️ 聊天記錄管理
+- 🌐 多語言介面（繁中 / 簡中 / English）
+- ⌨️ 快捷鍵支援
 
 ## 🆓 免費 API 供應商
 
@@ -36,42 +34,42 @@
 
 > **API 端點**：Ollama Cloud `https://ollama.com/v1` · Google AI `https://generativelanguage.googleapis.com/v1beta` · Groq `https://api.groq.com/openai/v1` · NVIDIA `https://integrate.api.nvidia.com/v1`
 
-## 安裝
+## 📦 安裝
 
 ### 從 Release 下載
 
-1. 到 [Releases](https://github.com/designkidd/momo-bud/releases) 下載最新的 `momo-ai-*-chrome.zip`
-2. 解壓縮
-3. 開啟 Chrome，前往 `chrome://extensions/`
-4. 開啟「開發人員模式」
-5. 點擊「載入未封裝項目」，選擇解壓縮後的資料夾
-6. 點擊工具列上的 Momo 圖示開始使用
+1. 📥 到 [Releases](https://github.com/designkidd/momo-bud/releases) 下載最新的 `momo-ai-*-chrome.zip`
+2. 📂 解壓縮
+3. 🌐 開啟 Chrome，前往 `chrome://extensions/`
+4. 🔧 開啟「開發人員模式」
+5. 📁 點擊「載入未封裝項目」，選擇解壓縮後的資料夾
+6. 🐹 點擊工具列上的 Momo 圖示開始使用
 
 ### 從原始碼安裝
 
-1. Clone 此專案
-2. 開啟 Chrome，前往 `chrome://extensions/`
-3. 開啟「開發人員模式」
-4. 點擊「載入未封裝項目」，選擇 `sider/` 資料夾
+1. 🔗 Clone 此專案
+2. 🌐 開啟 Chrome，前往 `chrome://extensions/`
+3. 🔧 開啟「開發人員模式」
+4. 📁 點擊「載入未封裝項目」，選擇 `sider/` 資料夾
 
-## 說明文件
+## 📖 說明文件
 
-📖 [designkidd.github.io](https://designkidd.github.io)
+👉 [designkidd.github.io](https://designkidd.github.io)
 
-## 專案結構
+## 🗂️ 專案結構
 
 ```
-sider/              # Chrome 擴充功能原始碼
-├── manifest.json   # MV3 manifest
-├── background.js   # Service worker
-├── sidepanel.*     # 側邊欄 UI
-├── options.*       # 設定頁面
-├── assets/         # 圖示、i18n 翻譯
-├── js/             # 核心模組
-└── libs/           # 第三方函式庫
-docs/               # 說明文件網站
+sider/              # 🧩 Chrome 擴充功能原始碼
+├── manifest.json   # 📋 MV3 manifest
+├── background.js   # ⚙️ Service worker
+├── sidepanel.*     # 💬 側邊欄 UI
+├── options.*       # 🔧 設定頁面
+├── assets/         # 🎨 圖示、i18n 翻譯
+├── js/             # 🧠 核心模組
+└── libs/           # 📚 第三方函式庫
+docs/               # 📖 說明文件網站
 ```
 
-## 授權
+## 📄 授權
 
 MIT License
