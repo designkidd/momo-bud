@@ -15,12 +15,12 @@
 - 📄 Web page capture & reference
 - 🔍 Web search (DuckDuckGo, Brave, Tavily)
 - 🖼️ Image upload & vision
-- 💡 Thinking mode (Thinking / Reasoning)
-- 🔊 Text-to-Speech (TTS)
+- 🔊 Text-to-Speech (System TTS)
 - 📝 Custom system prompts
 - 🗂️ Chat history management
 - 🌐 Multi-language UI (繁中 / 簡中 / English)
 - ⌨️ Keyboard shortcuts
+- 👁️ Adjustable font size & weight for comfortable reading
 
 ## 🆓 Free API Providers
 
