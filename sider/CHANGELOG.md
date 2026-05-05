@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.21.27] - 2026-05-05
+### Docs — AI Providers 內文分類語句一致化
+- 調整中英文 `docs/ai-providers.html` 與 `docs/en/ai-providers.html` 的段落文字，將「本地供應商」舊措辭統一為「本地模型供應商 + 獨立 Agent / Gateway 供應商」語意。
+- 補充 Hermes 需要 `API_SERVER_KEY` 與自訂 API endpoint 文字說明，避免標題分類與內文敘述不一致。
+
+---
+
 ## [2.21.26] - 2026-05-05
 ### Docs — Web Search 英文文件修正
 - 修正 `docs/en/web-search.html` 仍列出已不存在的 Google / SearXNG 搜尋引擎，改為與實際設定頁一致的 DuckDuckGo（預設）、Brave、Tavily。

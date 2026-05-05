@@ -126,7 +126,7 @@ API_SERVER_CORS_ORIGINS=*</code></pre>
 <ol>
   <li>開啟側邊欄，點擊右上角 <strong>設定</strong>（⚙️）。</li>
   <li>在左側導覽列選擇 <strong>AI 模型</strong>。</li>
-  <li>選擇要使用的供應商，輸入 <strong>API 金鑰</strong>（雲端供應商需要；本地供應商不需要）。</li>
+  <li>選擇要使用的供應商，輸入 <strong>API 金鑰</strong>（雲端供應商通常需要；本地模型供應商通常不需要；Hermes 需填入 <code>API_SERVER_KEY</code>）。</li>
   <li>若需自訂網址，填寫 <strong>API 端點</strong>（見下方「自訂 API 端點」）。</li>
   <li>使用 <strong>測試連線</strong> 確認金鑰與網路可正常連線後再開始對話。</li>
 </ol>
@@ -162,7 +162,7 @@ API_SERVER_CORS_ORIGINS=*</code></pre>
 </div>
 
 <h2>自訂 API 端點</h2>
-<p>若使用代理、企業閘道或自架相容服務，可在供應商設定中覆寫預設 Base URL，將請求導向你的 <strong>自訂 API 端點</strong>（仍須符合 OpenAI 相容的 path 與回應格式）。本地供應商則依預設埠為準，亦可改為其他機器或埠號。</p>
+<p>若使用代理、企業閘道或自架相容服務，可在供應商設定中覆寫預設 Base URL，將請求導向你的 <strong>自訂 API 端點</strong>（仍須符合 OpenAI 相容的 path 與回應格式）。本地模型供應商與獨立 Agent / Gateway 供應商則可依預設埠連線，亦可改為其他機器或埠號。</p>
 
 <nav class="page-nav">
   <a href="sidebar-chat.html"><span class="label">上一頁</span><span class="title">← 側邊欄聊天</span></a>
