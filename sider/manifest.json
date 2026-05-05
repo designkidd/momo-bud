@@ -1,8 +1,8 @@
 
 {
-  "name": "Momo:AI",
-  "description": "Friendly AI Chat Sidebar",
-  "version": "2.21.3",
+  "name": "Momo AI Bud",
+  "description": "Friendly AI chat sidebar — Momo AI Bud",
+  "version": "2.21.22",
   "manifest_version": 3,
   "icons": {
     "16": "icons/icon16.png",
@@ -34,6 +34,7 @@
     "https://api.tavily.com/*"
   ],
   "optional_host_permissions": [
+    "<all_urls>",
     "http://*/*",
     "https://*/*"
   ],
@@ -48,7 +49,7 @@
     }
   ],
   "action": {
-    "default_title": "Open Momo"
+    "default_title": "Momo AI Bud"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
@@ -81,7 +82,7 @@
         "default": "Alt+Shift+Y",
         "mac": "Command+Shift+Y"
       },
-      "description": "Open Momo"
+      "description": "Open Momo AI Bud"
     }
   }
 }

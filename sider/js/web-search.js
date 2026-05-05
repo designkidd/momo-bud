@@ -1,5 +1,5 @@
 /* js/web-search.js
-   Web Search module for Momo:AI
+   Web Search module for Momo AI Bud
    Providers:
      - DuckDuckGo (free, no key — scrapes html.duckduckgo.com)
      - Brave Search API (free tier 2000/month, needs key)
@@ -249,18 +249,33 @@ const WebSearch = (() => {
 
     console.log('[WebSearch] provider:', provider, '| query:', q, '| max:', maxResults, '| simple:', simpleMode);
 
-    let results;
-    switch (provider) {
-      case 'brave':
-        results = await searchBrave(q, cfg.braveSearchApiKey, maxResults);
-        break;
-      case 'tavily':
-        results = await searchTavily(q, cfg.tavilyApiKey, maxResults);
-        break;
-      case 'duckduckgo':
-      default:
-        results = await searchDuckDuckGo(q, maxResults);
-        break;
+    async function runProvider(name) {
+      switch (name) {
+        case 'brave':
+          return searchBrave(q, cfg.braveSearchApiKey, maxResults);
+        case 'tavily':
+          return searchTavily(q, cfg.tavilyApiKey, maxResults);
+        case 'duckduckgo':
+        default:
+          return searchDuckDuckGo(q, maxResults);
+      }
+    }
+
+    let results = [];
+    try {
+      results = await runProvider(provider);
+      if(!results.length && provider !== 'duckduckgo') {
+        _lastDebugLog.push(`${provider}: 0 results, falling back to DuckDuckGo`);
+        results = await runProvider('duckduckgo');
+      }
+    } catch (e) {
+      _lastDebugLog.push(`${provider}: ${e.message}`);
+      if(provider !== 'duckduckgo') {
+        _lastDebugLog.push('Fallback: DuckDuckGo');
+        results = await runProvider('duckduckgo');
+      } else {
+        throw e;
+      }
     }
 
     if (!simpleMode && results.length > 0) {

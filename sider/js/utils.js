@@ -57,6 +57,7 @@ const PROVIDER_ICONS = {
   google:   'assets/icons/google.svg',
   ollama:   'assets/icons/ollama.svg',
   groq:       'assets/icons/groq.svg',
+  hermes:     'assets/icons/hermes.svg',
   lmstudio: 'assets/icons/lmstudio.svg',
   openclaw: 'assets/icons/openclaw.svg',
   nvidia:     'assets/icons/nvidia.svg',
@@ -87,6 +88,14 @@ const PROVIDER_DEFAULTS = {
     id: 'groq', name: 'Groq',
     baseUrl: 'https://api.groq.com/openai/v1',
     models: ['openai/gpt-oss-120b', 'meta-llama/llama-4-scout-17b-16e-instruct']
+  },
+  hermes: {
+    id: 'hermes', name: 'Hermes',
+    baseUrl: 'http://127.0.0.1:8642/v1',
+    models: ['hermes-agent'],
+    testModel: 'hermes-agent',
+    isAgentProvider: true,
+    isBeta: true
   },
   lmstudio: {
     id: 'lmstudio', name: 'LM Studio',
@@ -133,7 +142,7 @@ const PROVIDER_DEFAULTS = {
   qwen: {
     id: 'qwen', name: 'Qwen',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    models: ['qwen3-max', 'qwen-plus'],
+    models: ['qwen3.5-plus', 'qwen3.5-flash'],
     supportsThinking: true,
     defaultEnableThinking: false
   }

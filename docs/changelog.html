@@ -50,6 +50,63 @@
 <main class="main-content">
 <h1>更新日誌</h1>
 
+<h2>v2.21.22（2026-05-05）</h2>
+<p><strong>Hermes Setup Guide：</strong>Hermes (beta) 現在和 OpenClaw (beta) 一樣，在 Connect row 右側顯示 <code>Setup Guide</code> 按鈕。Setup Guide modal 會依目前 provider 切換內容；Hermes 會顯示 <code>.env</code> 範例與重啟 Hermes gateway 的步驟，包含 <code>API_SERVER_CORS_ORIGINS=*</code> 說明與 <code>API_SERVER_KEY=&lt;your-secret-key&gt;</code> 佔位。</p>
+
+<h2>v2.21.21（2026-05-05）</h2>
+<p><strong>Hermes .env 說明：</strong>設定頁與 AI Providers 文件補充 Hermes Agent <code>.env</code> 範例，說明需像 OpenClaw gateway 一樣修改 <code>API_SERVER_ENABLED</code>、<code>API_SERVER_HOST</code>、<code>API_SERVER_PORT</code>、<code>API_SERVER_KEY</code> 與 <code>API_SERVER_CORS_ORIGINS</code>。範例 key 改用 <code>&lt;your-secret-key&gt;</code> 佔位，並標明 <code>API_SERVER_CORS_ORIGINS=*</code> 是 Chrome extension / 遠端連線最簡單可用設定。</p>
+
+<h2>v2.21.20（2026-05-05）</h2>
+<p><strong>Hermes Chat 403：</strong>Hermes chat request 改由 background <code>proxy_fetch</code> 代發，避免 sidepanel 直接 <code>fetch</code> 時與 curl 不一致的 browser Origin / CORS / preflight 差異造成 <code>HTTP 403</code>。Hermes <code>/v1/chat/completions</code> 也改用最小 OpenAI-compatible payload：<code>model: "hermes-agent"</code>、<code>messages</code>、<code>stream: false</code>。</p>
+
+<h2>v2.21.19（2026-05-05）</h2>
+<p><strong>Hermes 連線與切換：</strong>Hermes 發生 <code>HTTP 401/403</code> 或 browser fetch 失敗時，錯誤訊息會直接顯示目前 Chrome extension origin，方便在 Hermes host 設定 <code>API_SERVER_CORS_ORIGINS=chrome-extension://&lt;extension-id&gt;</code> 後重啟 gateway。從其他模型切換到 Hermes 時會自動開新對話並清掉目前畫面的舊上下文；送出 API 前也會過濾本地 system message，確保 agent provider 不使用自訂 system prompt。</p>
+
+<h2>v2.21.18（2026-05-05）</h2>
+<p><strong>OpenClaw 回覆穩定性：</strong>修正發送訊息後可能先重覆上一輪 assistant 回覆的問題。OpenClaw <code>chat.send</code> 改回 <code>deliver: true</code>，並用本次 <code>runId</code> 與發送前 history snapshot 過濾舊事件／舊 history，後備輪詢只接受本次新增訊息之後的新 assistant 回覆。</p>
+
+<h2>v2.21.17（2026-05-05）</h2>
+<p><strong>Hermes Provider：</strong>新增 Hermes (beta) AI 服務提供商，預設 Base URL 為 <code>http://127.0.0.1:8642/v1</code>，預設模型為 <code>hermes-agent</code>。此 provider 透過 Hermes 官方 OpenAI 相容 API Server 接入，沿用現有 Chat Completions 串流路徑，不使用 OpenClaw WebSocket RPC。設定頁新增 Hermes (beta) 選項、官方 favicon 風格 icon、API Server 提示與官方文件連結；Hermes 改為跟 OpenClaw 一樣先 Connect，成功後才自動啟用模型，並在側邊欄禁用自訂 system prompt、聊天歷史/新對話、聯網搜尋與引用頁面。</p>
+
+<h2>v2.21.16（2026-05-05）</h2>
+<p><strong>串流回覆：</strong>修正 AI 回覆尚未完成時，在輸入框按 <code>Enter</code> 或 <code>Cmd/Ctrl+Enter</code> 會誤觸發停止生成，造成 <code>BodyStreamBuffer was aborted</code> 的問題。現在串流中輸入框快捷鍵會被忽略，停止生成仍保留在送出按鈕切換出的停止按鈕上。</p>
+
+<h2>v2.21.15（2026-05-05）</h2>
+<p><strong>截圖框選：</strong>截圖框選遮罩新增操作提示，支援拖曳選區、雙擊截取整個可見頁面、按 <code>Esc</code> 取消。單擊或過小拖曳不再直接取消，避免誤觸。</p>
+
+<h2>v2.21.14（2026-05-05）</h2>
+<p><strong>截圖上傳：</strong>「截圖上傳」改為先顯示框選遮罩，拖選區域後只裁剪該區域並自動送出；支援 <code>Esc</code> 或右鍵取消，並依實際截圖尺寸與 viewport 比例換算座標。</p>
+
+<h2>v2.21.13（2026-05-05）</h2>
+<p><strong>截圖上傳自動送出：</strong>在輸入區工具列新增「截圖上傳」按鈕，可截取目前活動分頁可見畫面，加入圖片訊息並自動送出；首次使用會請求必要權限，圖片過大時會自動壓縮或提示縮小視窗。</p>
+
+<h2>v2.21.12（2026-05-05）</h2>
+<p><strong>引用頁面：</strong>修正 Readability 抓取流程會改動原網站 DOM 的問題。現在會先 clone 整份頁面，只在 clone 內加入 <code>&lt;base&gt;</code> 與清理 hidden/script/style 元素，不再對原頁插入節點或移除元素，避免 <code>linux.do</code> / Discourse 類站點抓取後排版變成未套樣式狀態。</p>
+
+<h2>v2.21.11（2026-05-05）</h2>
+<p><strong>聊天穩定性與聯網搜尋：</strong>修正打字與 AI 串流輸出時的介面抖動，聊天區會保留穩定 scrollbar gutter，串流自動捲動也改為每個 animation frame 最多執行一次。聯網搜尋維持智慧觸發：開啟時僅在訊息看起來需要即時網路資訊時搜尋，未開啟時仍會對明確「上網查／搜尋」自動觸發；搜尋上下文同時注入 system prompt 與最後一則 user message，降低模型回覆「我沒有連網」的機率。Brave / Tavily 失敗或 0 結果時會 fallback 到 DuckDuckGo，OpenRouter <code>:online</code> 僅作為後備。</p>
+
+<h2>v2.21.10（2026-05-04）</h2>
+<p><strong>引用頁面：</strong>調整 LM Studio 相容修正。空白引用頁面送出時，預設 user query 只會在送 API 前補入，不再寫進對話記錄，也不會顯示在聊天畫面；畫面仍只顯示「引用頁面」標籤，同時避免 Qwen Jinja template 報錯。</p>
+
+<h2>v2.21.9（2026-05-04）</h2>
+<p><strong>LM Studio 引用頁面：</strong>修正只附加「引用頁面」但輸入框空白時，送出空白 user 訊息導致 LM Studio / Qwen Jinja prompt template 報錯 <code>No user query found in messages</code> 的問題。現在會自動補上「請根據引用頁面內容回答。」作為 user query；送出按鈕也只依等待送出的頁面引用啟用，避免舊引用誤判可送。</p>
+
+<h2>v2.21.8（2026-04-12）</h2>
+<p><strong>聯網搜尋：</strong>側邊欄開啟聯網後改為<strong>智慧觸發</strong>（僅在訊息帶有價格／新聞／天氣、明確「上網查」、網址等訊號時才搜尋），不再每則訊息都搜。將「今年／去年」觸發時機調整到創作／翻譯等略過規則之後，避免「幫我寫一篇 2026 年的故事」誤觸發搜尋。說明文字與 i18n 已同步更新。</p>
+
+<h2>v2.21.7（2026-04-12）</h2>
+<p><strong>聯網搜尋 — 簡短追問與對話脈絡：</strong>先前若只依<strong>最後一則使用者訊息</strong>組搜尋關鍵字，承接語（例如上一輪談 iPhone、本輪只問「中國的價錢」）容易變成過於籠統的查詢。現在會從<strong>先前對話</strong>擷取主題關鍵字（如產品／型號），在符合條件時併入實際搜尋字串；送 API 時亦可在最後一則純文字 user 訊息前加上一行英文主題提示，協助 OpenRouter <code>:online</code> 等情境對齊上下文。</p>
+
+<h2>v2.21.6（2026-04-08）</h2>
+<p>將設計系統預覽文件由 <code>dev-notes/ui-preview.html</code> 重新命名為 <code>dev-notes/design-system-preview.html</code>；文件內版本字樣同步為 v2.21.6。</p>
+
+<h2>v2.21.5（2026-04-08）</h2>
+<p><code>dev-notes/design-system-preview.html</code> 補齊按鍵交互說明（Primary／Outline／Danger／Disabled、分段按鈕與主題映射等）；文件版本字樣同步為 v2.21.5。</p>
+
+<h2>v2.21.4（2026-04-06）</h2>
+<p>產品名稱統一為 <strong>Momo AI Bud</strong>（manifest、工具列、懸浮球、側欄／設定頁預設標題）。修正設定頁分頁標題：改為依介面語系顯示（例如英文為 <code>Settings - Momo AI Bud</code>），不再固定為中文「設定 - AI Sidebar」。</p>
+
 <h2>v2.21.3（2026-04-06）</h2>
 <p>README／README.zh-TW 開頭賣點與功能列表對齊（Groq、OpenClaw、系統 TTS、字體可調、多語言、浮球等）；移除「深度思考／think deeper」舊描述。</p>
 

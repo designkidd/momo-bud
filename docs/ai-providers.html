@@ -75,6 +75,7 @@
 <ul>
   <li><strong>Ollama</strong>：<code>localhost:11434/v1</code> — 免費本地模型。</li>
   <li><strong>LM Studio</strong>：<code>localhost:1234/v1</code> — 圖形化介面管理本地模型。</li>
+  <li><strong>Hermes (Beta)</strong>：<code>127.0.0.1:8642/v1</code> — 本地 Agent 的 OpenAI 相容 API Server；預設模型為 <code>hermes-agent</code>。</li>
   <li><strong>OpenClaw (Beta)</strong>：<code>ws://127.0.0.1:18789</code> — WebSocket 協定。</li>
 </ul>
 
@@ -94,7 +95,21 @@
     <tr><td>NVIDIA</td><td><a href="https://build.nvidia.com/" target="_blank">build.nvidia.com</a></td></tr>
   </tbody>
 </table>
-<p>本地供應商（Ollama、LM Studio、OpenClaw）不需要 API 金鑰。</p>
+<p>本地供應商（Ollama、LM Studio、OpenClaw）不需要 API 金鑰。Hermes 通常需要填入本地 API Server 的 <code>API_SERVER_KEY</code>。</p>
+
+<h2>Hermes (Beta) 設定</h2>
+<p>Hermes 透過 OpenAI 相容 HTTP API 接入，和 OpenClaw 一樣需要先在 Hermes 的 <code>.env</code> 開啟 gateway / API Server，再在 Momo 填入相同的 key。</p>
+<pre><code>API_SERVER_ENABLED=true
+API_SERVER_HOST=0.0.0.0
+API_SERVER_PORT=8642
+API_SERVER_KEY=&lt;your-secret-key&gt;
+API_SERVER_CORS_ORIGINS=*</code></pre>
+<ol>
+  <li>在 Hermes <code>.env</code> 修改以上幾項；<code>API_SERVER_KEY</code> 請使用自己的密碼，不要使用範例值。</li>
+  <li>遠端或 Chrome extension 直接連線時，<code>API_SERVER_CORS_ORIGINS=*</code> 是最簡單的可用設定；若要更嚴格，可改成指定可信任 origin。</li>
+  <li>重啟 Hermes Gateway，預設會監聽 <code>http://127.0.0.1:8642</code>。</li>
+  <li>在 Momo 選擇 <strong>Hermes (beta)</strong>，保留預設 Base URL 或填入你的遠端 URL，然後啟用 <code>hermes-agent</code> 模型。</li>
+</ol>
 
 <h2>設定供應商</h2>
 <ol>

@@ -4,6 +4,159 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.21.22] - 2026-05-05
+### Added — Hermes Setup Guide
+- Hermes (beta) 現在和 OpenClaw (beta) 一樣，在 Connect row 右側顯示 `Setup Guide` 按鈕。
+- Setup Guide modal 會依照目前 provider 切換內容；Hermes 會顯示 `.env` 範例與重啟 Hermes gateway 的步驟，包含 `API_SERVER_CORS_ORIGINS=*` 說明與 `API_SERVER_KEY=<your-secret-key>` 佔位。
+
+---
+
+## [2.21.21] - 2026-05-05
+### Docs — Hermes `.env` 設定說明
+- 設定頁與中英文 AI Providers 文件補充 Hermes Agent `.env` 範例，說明需像 OpenClaw gateway 一樣修改 `API_SERVER_ENABLED`、`API_SERVER_HOST`、`API_SERVER_PORT`、`API_SERVER_KEY` 與 `API_SERVER_CORS_ORIGINS`。
+- 文件範例使用 `API_SERVER_KEY=<your-secret-key>` 佔位，不再使用實際密碼；並標明 `API_SERVER_CORS_ORIGINS=*` 是 Chrome extension / 遠端連線最簡單可用設定。
+
+---
+
+## [2.21.20] - 2026-05-05
+### Fixed — Hermes Chat 403
+- Hermes chat request 改由 background `proxy_fetch` 代發，避免 sidepanel 直接 `fetch` 時與 curl 不一致的 browser Origin / CORS / preflight 差異造成 `HTTP 403`。
+- Hermes `/v1/chat/completions` 改用官方 curl 對齊的最小 OpenAI-compatible payload：`model: "hermes-agent"`、`messages`、`stream: false`，不再帶通用 provider 的 `temperature` / thinking 參數。
+
+---
+
+## [2.21.19] - 2026-05-05
+### Fixed — Hermes 連線與切換行為
+- Hermes 發生 `HTTP 401/403` 或 browser fetch 失敗時，錯誤訊息會直接提示檢查 `API_SERVER_KEY`，並顯示目前 Chrome extension origin，方便在 Hermes host 設定 `API_SERVER_CORS_ORIGINS=chrome-extension://<extension-id>` 後重啟 gateway。
+- 從其他模型切換到 Hermes agent provider 時會自動開新對話、清掉目前畫面的舊對話與圖片／頁面引用狀態，避免把其他模型的上下文送入 Hermes。
+- Hermes / agent provider 送出 API 前會過濾本地 system message，確保自訂 system prompt 真正不會送到 agent provider。
+
+---
+
+## [2.21.18] - 2026-05-05
+### Fixed — OpenClaw 重覆上一輪回覆
+- 對齊 OpenClaw Gateway 最新協議與官方 Copilot 行為，`chat.send` 改回 `deliver: true`，避免訊息只被記錄但未正常派送給 agent。
+- OpenClaw 串流事件改用 `runId` 關聯本次發送；後備 `chat.history` 輪詢會先建立發送前 history snapshot，只接受本次新增 user 之後的新 assistant 回覆，避免誤抓上一輪回覆並在畫面重覆顯示。
+
+---
+
+## [2.21.17] - 2026-05-05
+### Added — Hermes Provider
+- 新增 **Hermes (beta)** AI Service Provider，預設 Base URL 為 `http://127.0.0.1:8642/v1`，預設模型為 `hermes-agent`。
+- Hermes 採用官方 OpenAI-compatible HTTP API Server 接入，沿用現有 Chat Completions 串流路徑，不使用 OpenClaw 的 WebSocket RPC。
+- 設定頁新增 Hermes (beta) provider 選項、官方 favicon 風格 icon、API Server 設定提示與官方文件連結；Hermes 改為跟 OpenClaw 一樣需要先 Connect，成功後才自動啟用 `hermes-agent` 模型，避免未連線或 key/CORS 錯誤時側欄直接送出造成 HTTP 403。
+- Hermes Connect 會優先檢查 `/v1/models` 以驗證 `API_SERVER_KEY`，再 fallback 到 `/health` / chat completion，錯誤訊息會提示檢查 `API_SERVER_KEY` 與 `API_SERVER_CORS_ORIGINS`。
+- 選取 Hermes (beta) 時，側邊欄會像 OpenClaw 一樣禁用自訂 system prompt、聊天歷史/新對話、聯網搜尋與引用頁面；即使切換前已有 pending page reference，送出時也不會附加到 Hermes。
+- README 與中英文 AI Providers 文件同步更新為 12+ providers，並補充 Hermes Agent 啟用 `API_SERVER_ENABLED` / `API_SERVER_KEY` 的設定說明。
+
+---
+
+## [2.21.16] - 2026-05-05
+### Fixed — 串流回覆中 Enter 不再停止生成
+- 修正 AI 回覆尚未完成時，在輸入框按 `Enter` 或 `Cmd/Ctrl+Enter` 會誤觸發停止生成，造成 `BodyStreamBuffer was aborted` 的問題。
+- 現在串流中輸入框的送出快捷鍵會被忽略；使用者可先輸入下一句，待上一輪回覆完成後再按 `Enter` 送出。
+- 停止生成仍保留在送出按鈕切換出的停止按鈕上。
+
+---
+
+## [2.21.15] - 2026-05-05
+### Changed — 截圖框選交互優化
+- 截圖框選遮罩新增操作提示，說明可拖曳選區、雙擊截取整個可見頁面、按 `Esc` 取消。
+- 雙擊遮罩會直接選取整個目前可見頁面並自動送出，方便快速模擬全屏截圖翻譯。
+- 單擊或過小拖曳不再直接取消遮罩，避免誤觸；仍可用 `Esc` 或右鍵取消。
+
+---
+
+## [2.21.14] - 2026-05-05
+### Changed — 截圖上傳支援框選區域
+- 「截圖上傳」按鈕改為先在目前網頁顯示框選遮罩，拖選區域後只裁剪該區域並自動送出，避免每次都上傳整個可見分頁。
+- 支援按 `Esc` 或右鍵取消框選；過小選區會視為取消。
+- 裁剪時依照實際截圖尺寸與 viewport 比例換算座標，保留高 DPI 螢幕下的清晰度。
+
+---
+
+## [2.21.13] - 2026-05-05
+### Added — 截圖上傳自動送出
+- 在輸入區工具列新增「截圖上傳」按鈕，可截取目前 Chrome 活動分頁的可見畫面，加入圖片訊息並自動送出，方便用視覺模型快速 OCR／翻譯畫面內容。
+- 截圖功能會在首次使用時請求 `<all_urls>` 可選權限，以符合 `chrome.tabs.captureVisibleTab` 對截圖權限的要求；PNG 過大時會自動改用 JPEG，仍超過 5MB 則提示縮小視窗後重試。
+- 新增繁中、簡中、英文的截圖按鈕與錯誤提示文案。
+
+### Changed — Qwen 預設模型
+- Qwen 預設模型改為 `qwen3.5-plus` 與 `qwen3.5-flash`，對齊目前 Qwen API 平台顯示的旗艦模型名稱。
+
+---
+
+## [2.21.12] - 2026-05-05
+### Fixed — 引用頁面不再改動原網站 DOM
+- 修正 Readability 引用頁面抓取流程會在原頁插入 `<base>` 並移除 hidden 元素，可能導致部分網站（例如 `linux.do` / Discourse 類站點）抓取後排版變成未套樣式狀態的問題。
+- 內容提取改為先 clone `document.documentElement`，只在 clone 內加入 `<base>`、清理 script/style/hidden 元素並回傳 HTML；不再修改 live page DOM。
+
+---
+
+## [2.21.11] - 2026-05-05
+### Fixed — 聊天畫面抖動與聯網搜尋穩定性
+- 修正輸入框 auto-grow、聊天區 scrollbar 與串流自動跟隨互相影響時，造成打字或 AI 串流輸出期間介面抖動的問題；聊天區改為保留穩定 scrollbar gutter，並限制串流自動捲動每個 animation frame 最多執行一次。
+- 側邊欄「聯網搜尋」維持智慧觸發：開啟時僅在訊息看起來需要即時網路資訊時搜尋；未開啟時仍保留明確搜尋語的自動觸發。
+- 搜尋結果同時注入 system prompt 與最後一則 user message，降低模型忽略搜尋上下文後回答「我沒有連網」的機率。
+- Brave / Tavily 搜尋失敗、未設定 API key 或回傳 0 筆時，會自動 fallback 到 DuckDuckGo；OpenRouter `:online` 只作為 client-side 搜尋失敗時的後備。
+- 設定頁與繁中／簡中／英文 i18n 說明同步更新為新的聯網搜尋行為。
+
+---
+
+## [2.21.10] - 2026-05-04
+### Changed — 引用頁面預設查詢不顯示在對話
+- 調整 2.21.9 的 LM Studio 相容修正：空白引用頁面送出時，預設 user query 只在組 API payload 時補入，不再寫進 session，也不會顯示在聊天畫面。
+- UI 仍只顯示「Page Referenced / 引用頁面」標籤；LM Studio / Qwen 仍能收到非空 user query 以避免 Jinja template 報錯。
+
+---
+
+## [2.21.9] - 2026-05-04
+### Fixed — LM Studio 引用頁面空訊息
+- 修正只附加「引用頁面」但輸入框空白時，仍送出空白 `user` 訊息，導致 LM Studio / Qwen Jinja prompt template 報錯 `No user query found in messages` 的問題。
+- 現在空白引用送出會自動補上一句「請根據引用頁面內容回答。」作為 user query，引用頁面內容仍保留為獨立 system context。
+- 送出按鈕只會依照等待送出的 `_pendingPageContext` 啟用，避免已使用過的舊頁面引用誤判為可送出。
+
+---
+
+## [2.21.8] - 2026-04-12
+### Changed — 聯網搜尋觸發邏輯
+- 側邊欄「聯網搜尋」開啟時改為**智慧觸發**：仍須通過 `shouldSearch`（明確搜尋語、價格／新聞／天氣等訊號、訊息內 URL 等）才會執行搜尋，**不再每則使用者訊息都搜**，以減少延遲、token 與搜尋 API 用量。
+- `year-ref`（今年／去年）判斷移至「創作／翻譯」等略過規則之後，避免「幫我寫一篇 2026 年的故事」誤觸發搜尋；「總結 2025 年…」等仍以年份觸發搜尋。
+- 設定頁與 i18n 說明已同步為上述行為。
+
+---
+
+## [2.21.7] - 2026-04-12
+### Fixed — 聯網搜尋與簡短追問
+- 開啟聯網搜尋時，若使用者只輸入承接上一輪的短句（例如先前談 iPhone、接著問「中國的價錢」），先前僅用**當則訊息**組搜尋關鍵字，容易變成籠統的「中國／價錢」而脫離主題。
+- **修正**：從**目前訊息之前**的對話文字擷取主題關鍵字（常見產品／型號等，如 `iPhone`），在判斷為「價格／地點類簡短追問」且字面上尚未帶出商品時，將關鍵字**併入實際搜尋字串**。
+- **送 API**：在上述條件下於最後一則純文字 user 訊息前加上一行英文脈絡（`Related topic from earlier in the conversation: …`），讓 OpenRouter `:online` 等由伺服器決定搜尋詞時也能對齊上一輪主題。
+- 實作位置：`sider/sidepanel.js`（`buildContextualSearchQuery`、`extractTopicHintsFromText`、`shouldAugmentSearchQuery` 等）。
+
+---
+
+## [2.21.6] - 2026-04-08
+### Changed
+- 將設計系統預覽文件由 `dev-notes/ui-preview.html` 重新命名為 `dev-notes/design-system-preview.html`，名稱更貼近用途
+- 同步更新 Design System Preview 文件內版本字樣至 `v2.21.6`
+
+---
+
+## [2.21.5] - 2026-04-08
+### Changed
+- `dev-notes/design-system-preview.html` 補齊按鍵交互說明：新增 Primary / Outline / Danger / Disabled 的行為規範，以及分段按鈕（single-select、active 狀態、Auto/Light/Dark 映射）說明
+- Design System Preview 文件版本字樣同步更新至 `v2.21.5`
+
+---
+
+## [2.21.4] - 2026-04-06
+### Changed
+- 產品名稱統一為 **Momo AI Bud**：`manifest.json` 的 `name`、工具列／快捷鍵提示、懸浮球與 iframe `title`、側邊欄與設定頁預設 `<title>`
+### Fixed
+- 設定頁瀏覽器分頁標題改為依介面語系更新（先前 `options.html` 的 `<title>` 寫死為「設定 - AI Sidebar」，選英文時仍顯示中文）；於 i18n 套用時設定 `document.title`（如英文 `Settings - Momo AI Bud`、繁中 `設定 - Momo AI Bud`）
+
+---
+
 ## [2.21.3] - 2026-04-06
 ### Changed
 - README / README.zh-TW：開頭賣點與功能列表對齊（含 Groq、OpenClaw、系統 TTS、字體大小／字粗、多語言、浮球等）；移除已不主打之「深度思考／think deeper」描述
@@ -186,7 +339,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 - **UI Design System Specification** (`sider/UI-SPEC.md`): formal document covering all design tokens (light/dark), typography, spacing, border radius, component interaction states (4-state: default/hover/focus/disabled), dark mode rules, animation standards, responsive breakpoints, iconography, and accessibility guidelines
 - **Cursor Rule** (`.cursor/rules/ui-design-system.mdc`): AI-readable condensed spec — auto-applies when editing CSS/HTML/JS under `sider/`
-- **UI Preview Page** (`sider/ui-preview.html`): standalone visual reference with live light/dark toggle, color swatches, type scale, spacing bars, radius grid, and interactive component demos
+- **Design System Preview Page** (`dev-notes/design-system-preview.html`): standalone visual reference with live light/dark toggle, color swatches, type scale, spacing bars, radius grid, and interactive component demos
 - **Cross-file token aliases**: `options.css` now defines `--accent`/`--accent-hover`; `sidepanel.css` now defines `--bg-page`/`--bg-card`/`--bg-subtle`/`--bg-active`/`--bg-active-hover`/`--focus` — both naming conventions work in both files
 
 ### Changed

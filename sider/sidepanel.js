@@ -32,6 +32,7 @@ let streaming = false;
 let streamAbortController = null;
 let preferMarkdown = true;
 let missingApiAlerted = false;
+let lastSelectedModelUid = '';
 let chatWithPageEnabled = false;
 let webSearchEnabled = false;
 let pageContextBusy = false;
@@ -133,13 +134,65 @@ async function streamOpenClawChat(assistantTs){
     }
   }
 
-  // 構建 chat.send 參數（與 Copilot ju() 一致）
+  function cleanOpenClawText(text){
+    return (typeof text === 'string' ? text : '')
+      .replace(/\[\[\s*reply_to:[^\]]+\]\]/g, '')
+      .trim();
+  }
+
+  function normalizeOpenClawText(text){
+    return cleanOpenClawText(text).replace(/\s+/g, ' ').trim();
+  }
+
+  function openClawMessageKey(m){
+    if(!m || typeof m !== 'object') return '';
+    const explicit = m.id || m.messageId || m.message_id || m.uuid || m.key;
+    if(explicit) return String(explicit);
+    const stamp = m.createdAt || m.created_at || m.timestamp || m.ts || '';
+    const role = m.role || '';
+    return stamp ? role + '|' + stamp : '';
+  }
+
+  function openClawHistorySnapshot(messages){
+    const keys = new Set();
+    const assistantTexts = new Set();
+    for(const m of Array.isArray(messages) ? messages : []){
+      const key = openClawMessageKey(m);
+      if(key) keys.add(key);
+      if(m?.role === 'assistant'){
+        const text = normalizeOpenClawText(extractOpenClawText(m) || '');
+        if(text) assistantTexts.add(text);
+      }
+    }
+    return { keys, assistantTexts, count: Array.isArray(messages) ? messages.length : 0 };
+  }
+
+  let preSendSnapshot = openClawHistorySnapshot([]);
+  try{
+    const hist = await openclawGateway.request('chat.history',
+      { sessionKey, limit: 50 }, { timeoutMs: 5000 });
+    preSendSnapshot = openClawHistorySnapshot(hist?.messages || []);
+  }catch(e){
+    console.warn('[OpenClaw] pre-send history snapshot failed:', e.message);
+  }
+
+  function isPreSendMessage(m){
+    const key = openClawMessageKey(m);
+    return !!key && preSendSnapshot.keys.has(key);
+  }
+
+  function isOldAssistantText(text){
+    const normalized = normalizeOpenClawText(text);
+    return !!normalized && preSendSnapshot.assistantTexts.has(normalized);
+  }
+
+  // 構建 chat.send 參數（OpenClaw Gateway：deliver 預設 true）
   const idempotencyKey = crypto?.randomUUID?.() || (Date.now() + '-' + Math.random().toString(16).slice(2));
   const sendParams = {
     sessionKey,
     message: userText || '',
     idempotencyKey,
-    deliver: false
+    deliver: true
   };
   // 圖片附件（與 Copilot 格式完全一致：{ type, mimeType, content }）
   if(userImages.length > 0){
@@ -154,7 +207,8 @@ async function streamOpenClawChat(assistantTs){
 
   // ── 狀態 ──
   let chatStream = '';           // 事件流累積的文本
-  let chatRunId = idempotencyKey;
+  let chatRunId = null;
+  let sendRequestStarted = false;
   let cleanup = null;
   let done = false;
   let pollTimer = null;
@@ -164,7 +218,6 @@ async function streamOpenClawChat(assistantTs){
   let eventCount = 0;           // 所有事件計數
   let chatEventCount = 0;       // chat 事件計數（delta/final）
   let pollCount = 0;
-  const sendTs = Date.now();    // 發送時間戳，用於輪詢過濾
 
   // ── 完成處理 ──
   function finish(text){
@@ -186,17 +239,21 @@ async function streamOpenClawChat(assistantTs){
       const hist = await openclawGateway.request('chat.history',
         { sessionKey, limit: 20 }, { timeoutMs: 8000 });
       const msgs = Array.isArray(hist?.messages) ? hist.messages : [];
-      // 找最後一條 user 後的 assistant 回覆
+      // 找本次發送後新增 user 後的 assistant 回覆，避免拿到上一輪答案
       let lastUserIdx = -1;
       for(let i = msgs.length - 1; i >= 0; i--){
-        if(msgs[i].role === 'user'){ lastUserIdx = i; break; }
+        if(msgs[i].role === 'user' && !isPreSendMessage(msgs[i])){
+          lastUserIdx = i;
+          break;
+        }
       }
       for(let i = lastUserIdx + 1; i < msgs.length; i++){
         const m = msgs[i];
         if(m.role !== 'assistant') continue;
-        const text = extractOpenClawText(m);
-        if(text && typeof text === 'string'){
-          return text.replace(/\[\[\s*reply_to:[^\]]+\]\]/g, '').trim();
+        if(isPreSendMessage(m)) continue;
+        const text = cleanOpenClawText(extractOpenClawText(m));
+        if(text && !isOldAssistantText(text)){
+          return text;
         }
       }
     }catch(e){
@@ -230,13 +287,25 @@ async function streamOpenClawChat(assistantTs){
 
     if(evtName === 'chat'){
       if(payload.sessionKey && payload.sessionKey !== sessionKey) return;
+      if(payload.runId){
+        if(chatRunId && payload.runId !== chatRunId) return;
+        if(!chatRunId){
+          if(!sendRequestStarted) return;
+          chatRunId = payload.runId;
+        }
+      }
 
       if(payload.state === 'delta'){
-        chatEventCount++;
         const text = extractOpenClawText(payload.message);
         if(typeof text === 'string'){
+          const cleaned = cleanOpenClawText(text);
+          if(!chatStream && isOldAssistantText(cleaned)){
+            console.warn('[OpenClaw] 忽略疑似舊 delta:', cleaned.slice(0, 100));
+            return;
+          }
+          chatEventCount++;
           // 事件流永遠覆蓋（不做長度比較，避免舊輪詢文本擋住新回覆）
-          chatStream = text;
+          chatStream = cleaned;
           hideThinkingDots(assistantTs);
           replaceMessageContent(assistantTs, chatStream, true);
           scheduleAutoFollow();
@@ -244,10 +313,14 @@ async function streamOpenClawChat(assistantTs){
         return;
       }
       if(payload.state === 'final'){
+        // 嘗試從 final 事件提取文本
+        const ft = cleanOpenClawText(extractOpenClawText(payload.message));
+        if(ft && isOldAssistantText(ft) && !chatStream){
+          console.warn('[OpenClaw] 忽略疑似舊 final:', ft.slice(0, 100));
+          return;
+        }
         chatEventCount++;
         console.log('[OpenClaw] 收到 final 事件, chatStream 長度:', chatStream.length);
-        // 嘗試從 final 事件提取文本
-        const ft = extractOpenClawText(payload.message);
         if(ft) chatStream = ft;
 
         // 與 Copilot 一致：如果 chatStream 為空（無 delta，如 tool call 後直接 final），
@@ -277,8 +350,10 @@ async function streamOpenClawChat(assistantTs){
   // ── 2) 發送 chat.send ──
   updateThinkingStatus(assistantTs, '');
   try{
-    await openclawGateway.request('chat.send', sendParams, { timeoutMs: 60000 });
-    console.log('[OpenClaw] chat.send 已確認');
+    sendRequestStarted = true;
+    const sendAck = await openclawGateway.request('chat.send', sendParams, { timeoutMs: 60000 });
+    if(sendAck?.runId) chatRunId = sendAck.runId;
+    console.log('[OpenClaw] chat.send 已確認', chatRunId ? ('runId=' + chatRunId) : '');
     updateThinkingStatus(assistantTs, '');
   }catch(e){
     // chat.send RPC 超時不代表訊息沒送出，Gateway 可能正在處理（web search 等）
@@ -314,26 +389,26 @@ async function streamOpenClawChat(assistantTs){
       const msgs = Array.isArray(hist?.messages) ? hist.messages : [];
       console.log('[OpenClaw] 備用輪詢 #'+pollCount+':', msgs.length, '條');
 
-      // 策略：找到最後一條 user 消息，只看它之後的 assistant 回覆
-      // 這樣避免把上一輪的 assistant 回覆當作本輪回覆
+      // 策略：只看本次發送後新增 user 之後的 assistant 回覆
       let lastUserIdx = -1;
       for(let i = msgs.length - 1; i >= 0; i--){
-        if(msgs[i].role === 'user'){ lastUserIdx = i; break; }
+        if(msgs[i].role === 'user' && !isPreSendMessage(msgs[i])){
+          lastUserIdx = i;
+          break;
+        }
       }
       // 在最後 user 之後找 assistant 回覆
       for(let i = lastUserIdx + 1; i < msgs.length; i++){
         const m = msgs[i];
         if(m.role !== 'assistant') continue;
-        const text = extractOpenClawText(m);
-        if(text && typeof text === 'string'){
-          const cleaned = text.replace(/\[\[\s*reply_to:[^\]]+\]\]/g, '').trim();
-          if(cleaned){
-            chatStream = cleaned;
-            hideThinkingDots(assistantTs);
-            replaceMessageContent(assistantTs, chatStream, true);
-            scheduleAutoFollow();
-            console.log('[OpenClaw] 備用輪詢回覆:', cleaned.slice(0, 100));
-          }
+        if(isPreSendMessage(m)) continue;
+        const cleaned = cleanOpenClawText(extractOpenClawText(m));
+        if(cleaned && !isOldAssistantText(cleaned)){
+          chatStream = cleaned;
+          hideThinkingDots(assistantTs);
+          replaceMessageContent(assistantTs, chatStream, true);
+          scheduleAutoFollow();
+          console.log('[OpenClaw] 備用輪詢回覆:', cleaned.slice(0, 100));
         }
       }
     }catch(e){
@@ -446,14 +521,14 @@ function scheduleAutoFollow(){
 function doAutoScroll(){
   const scroller = getScrollContainer();
   if(!scroller) return;
-  _programmaticScroll = true;
-  scroller.scrollTop = scroller.scrollHeight;
-  lastScrollPosition = scroller.scrollTop;
-  if(scrollRAF) cancelAnimationFrame(scrollRAF);
+  if(scrollRAF) return;
   scrollRAF = requestAnimationFrame(()=>{
     scrollRAF = null;
     _programmaticScroll = true;
-    scroller.scrollTop = scroller.scrollHeight;
+    const targetScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    if(Math.abs(scroller.scrollTop - targetScrollTop) > 1){
+      scroller.scrollTop = targetScrollTop;
+    }
     lastScrollPosition = scroller.scrollTop;
     setTimeout(()=>{ _programmaticScroll = false; }, 80);
   });
@@ -601,6 +676,23 @@ function sp_tpl(key, vars){
   let s = sp_t(key);
   if(vars) Object.keys(vars).forEach(k=>{ s = s.replace(new RegExp('\\{\\{'+k+'\\}\\}','g'), vars[k]); });
   return s;
+}
+function getDefaultPageContextQuery(){
+  const lang = awaitGetZhVariant.cached || _defaultLang();
+  if(lang === 'en') return 'Please answer based on the referenced page content.';
+  if(lang === 'hans') return '请根据引用页面内容回答。';
+  return '請根據引用頁面內容回答。';
+}
+function getApiMessageContent(msg){
+  if(msg?.role !== 'user' || !msg._hasPageContext) return msg?.content;
+  if(typeof msg.content === 'string'){
+    return msg.content.trim() ? msg.content : getDefaultPageContextQuery();
+  }
+  if(Array.isArray(msg.content)){
+    const hasText = msg.content.some(part => part?.type === 'text' && String(part.text || '').trim());
+    return hasText ? msg.content : [{ type: 'text', text: getDefaultPageContextQuery() }, ...msg.content];
+  }
+  return msg?.content || getDefaultPageContextQuery();
 }
 function _defaultLang() {
   return (typeof window.__detectBrowserLanguage === 'function') ? window.__detectBrowserLanguage() : 'en';
@@ -786,6 +878,7 @@ function cacheDom(){
     modelRowWrap: document.querySelector('.model-row-wrap'),
     root: $('.sidebar-frame'),
     imageUploadButton: $('#imageUploadButton'),
+    screenshotUploadButton: $('#screenshotUploadButton'),
     imageFileInput: $('#imageFileInput'),
     imagePreviewContainer: $('#imagePreviewContainer'),
     pageContentPreview: $('#pageContentPreview'),
@@ -817,11 +910,13 @@ function bindEvents(){
     // Enter (no modifier) or Cmd/Ctrl+Enter → send
     if(e.key==='Enter' && !e.shiftKey){
       e.preventDefault();
-      streaming?stopStreaming():onSend();
+      if(streaming) return;
+      onSend();
     }
     if(e.key==='Enter' && (e.metaKey || e.ctrlKey)){
       e.preventDefault();
-      streaming?stopStreaming():onSend();
+      if(streaming) return;
+      onSend();
     }
   });
   els.messageInput.addEventListener('input', ()=>{
@@ -867,7 +962,11 @@ function bindEvents(){
     syncSystemMessage();
   });
   els.modelSelector.addEventListener('change', async e=>{
-    await chrome.storage.sync.set({ model: e.target.value });
+    const previousUid = lastSelectedModelUid || '';
+    const nextUid = e.target.value || '';
+    await handleAgentProviderModelSwitch(nextUid, previousUid);
+    lastSelectedModelUid = nextUid;
+    await chrome.storage.sync.set({ model: nextUid });
     updateOpenClawPromptVisibility();
   });
   els.settingsButton.addEventListener('click', openSettingsSafe);
@@ -894,6 +993,7 @@ function bindEvents(){
 
   // 圖片上傳事件
   els.imageUploadButton?.addEventListener('click', ()=>els.imageFileInput.click());
+  els.screenshotUploadButton?.addEventListener('click', handleScreenshotUpload);
   els.imageFileInput?.addEventListener('change', handleImageUpload);
 
   // 剪貼板粘貼圖片事件
@@ -1137,6 +1237,7 @@ async function loadModels() {
     }
     // 構建帶圖標的自定義下拉選單
     buildModelDropdown(enabled);
+    lastSelectedModelUid = sel.value || '';
     // 載入後檢查是否為 OpenClaw，調整提示詞選擇器
     updateOpenClawPromptVisibility();
   } catch(e){
@@ -1271,40 +1372,73 @@ function buildModelDropdown(enabledModels){
   wrap.appendChild(dd);
 }
 
-/* ================= OpenClaw Prompt Visibility ================= */
+const AGENT_PROVIDER_IDS = new Set(['openclaw', 'hermes']);
+
+function isAgentProviderId(providerId, providerConfigs){
+  const cfg = providerConfigs?.[providerId];
+  return !!providerId && (AGENT_PROVIDER_IDS.has(providerId) || !!cfg?.isOpenClaw || !!cfg?.isAgentProvider);
+}
+
+async function handleAgentProviderModelSwitch(nextUid, previousUid){
+  const nextProvider = (nextUid || '').split('::')[0] || '';
+  const previousProvider = (previousUid || '').split('::')[0] || '';
+  if(!nextProvider || nextProvider === previousProvider) return;
+
+  const { providerConfigs } = await chrome.storage.local.get('providerConfigs');
+  if(nextProvider !== 'hermes' && !providerConfigs?.[nextProvider]?.isAgentProvider) return;
+
+  const cur = getCurrentSession();
+  if(cur && Array.isArray(cur.messages) && cur.messages.length > 0){
+    createNewSession(false);
+    console.log('[SP] Agent provider switch cleared visible conversation:', previousProvider, '→', nextProvider);
+  } else {
+    renderAllMessages();
+    renderSessionList();
+    hidePageContentPreview();
+  }
+  uploadedImages = [];
+  renderImagePreviews();
+  resetComposerIfEmpty();
+}
+
+/* ================= Agent Provider Controls ================= */
 async function updateOpenClawPromptVisibility(){
   try{
     const selectedUid = els.modelSelector.value || '';
-    const { customModels } = await chrome.storage.local.get('customModels');
-    let isOpenClaw = false;
+    const { customModels, providerConfigs } = await chrome.storage.local.get(['customModels','providerConfigs']);
     const md = findModelByUid(customModels, selectedUid);
-    isOpenClaw = md?.provider === 'openclaw';
+    const providerId = md?.provider || '';
+    const isOpenClaw = providerId === 'openclaw' || !!providerConfigs?.[providerId]?.isOpenClaw;
+    const isAgentProvider = isAgentProviderId(providerId, providerConfigs);
     // 禁用提示詞選擇器（灰色不可操作），但不隱藏
     const promptWrap = els.promptSelector?.closest('.select-wrap.prompt-select');
     if(promptWrap){
-      promptWrap.style.opacity = isOpenClaw ? '0.35' : '';
-      promptWrap.style.pointerEvents = isOpenClaw ? 'none' : '';
+      promptWrap.style.opacity = isAgentProvider ? '0.35' : '';
+      promptWrap.style.pointerEvents = isAgentProvider ? 'none' : '';
     }
     if(els.promptSelector){
-      els.promptSelector.disabled = isOpenClaw;
+      els.promptSelector.disabled = isAgentProvider;
     }
-    // 禁用時鐘（歷史）與新對話按鈕，OpenClaw 歷史由 chat.history 自動載入
+    // 禁用時鐘（歷史）與新對話按鈕，agent provider 由自身 session / memory 管理
     for(const btn of [els.historyButton, els.newChatButton]){
       if(!btn) continue;
-      btn.style.opacity = isOpenClaw ? '0.35' : '';
-      btn.style.pointerEvents = isOpenClaw ? 'none' : '';
-      btn.disabled = isOpenClaw;
+      btn.style.opacity = isAgentProvider ? '0.35' : '';
+      btn.style.pointerEvents = isAgentProvider ? 'none' : '';
+      btn.disabled = isAgentProvider;
     }
-    // 禁用聯網搜尋與引用頁面按鈕，OpenClaw 有原生搜尋能力且不支援頁面引用
+    // 禁用聯網搜尋與引用頁面按鈕，agent provider 有原生工具/上下文，不走 Momo 的外掛上下文
     for(const btn of [els.webSearchButton, els.pageContextButton]){
       if(!btn) continue;
-      btn.style.opacity = isOpenClaw ? '0.35' : '';
-      btn.style.pointerEvents = isOpenClaw ? 'none' : '';
-      btn.disabled = isOpenClaw;
-      if(isOpenClaw) btn.setAttribute('aria-pressed','false');
+      btn.style.opacity = isAgentProvider ? '0.35' : '';
+      btn.style.pointerEvents = isAgentProvider ? 'none' : '';
+      btn.disabled = isAgentProvider;
+      if(isAgentProvider){
+        btn.setAttribute('aria-pressed','false');
+        btn.classList.remove('active');
+      }
     }
-    // 切換離開 OpenClaw 時，恢復按鈕但重置狀態
-    if(!isOpenClaw){
+    // 切換離開 agent provider 時，恢復按鈕但重置狀態
+    if(!isAgentProvider){
       if(els.webSearchButton && !webSearchEnabled){
         els.webSearchButton.classList.remove('active');
       }
@@ -1315,6 +1449,9 @@ async function updateOpenClawPromptVisibility(){
     if(isOpenClaw){
       console.log('[SP] OpenClaw 模型已選取，禁用系統提示詞選擇器、歷史按鈕、聯網搜尋與引用頁面，自動載入對話記錄');
       loadAndShowOpenClawHistory();
+    } else if(isAgentProvider){
+      console.log('[SP] Agent provider 模型已選取，禁用系統提示詞選擇器、歷史按鈕、聯網搜尋與引用頁面');
+      hidePageContentPreview();
     } else {
       // 切換離開 OpenClaw：若當前 session 含 OpenClaw 歷史，建立新對話
       const session = getCurrentSession();
@@ -1334,6 +1471,16 @@ async function isCurrentModelOpenClaw(){
     const { customModels } = await chrome.storage.local.get('customModels');
     const md = findModelByUid(customModels, selectedUid);
     return md?.provider === 'openclaw';
+  }catch(e){}
+  return false;
+}
+
+async function isCurrentModelAgentProvider(){
+  try{
+    const selectedUid = els.modelSelector.value || '';
+    const { customModels, providerConfigs } = await chrome.storage.local.get(['customModels','providerConfigs']);
+    const md = findModelByUid(customModels, selectedUid);
+    return isAgentProviderId(md?.provider, providerConfigs);
   }catch(e){}
   return false;
 }
@@ -1466,6 +1613,11 @@ function toggleWebSearch(){
  *   2. Check "SKIP search" patterns (creative, coding, chat, general knowledge…).
  *   3. Default → needed: false. Only search when there is a clear signal.
  *
+ * When the sidebar "web search" toggle is ON, the caller still requires
+ * `needed === true` (smart trigger); the toggle means search is allowed,
+ * not "run on every message". Explicit search requests can auto-trigger
+ * even when the toggle is off.
+ *
  * Multilingual heuristics: ZH (Traditional/Simplified), EN, JA, KO, ES, FR, DE, PT.
  */
 function shouldSearch(msg){
@@ -1526,11 +1678,6 @@ function shouldSearch(msg){
   if(/(release date|發售|上市|發布|出售|when does .+ come out|when is .+ released|when will .+ launch|発売日|출시일)/i.test(m))
     return { needed: true, reason: 'release' };
 
-  // Year references (current or last year — likely wants fresh info)
-  const yr = new Date().getFullYear();
-  if(new RegExp(`\\b(${yr}|${yr - 1})\\b`).test(m))
-    return { needed: true, reason: 'year-ref' };
-
   // Specific real-world entity lookup (brand + product, company + something)
   if(/(推薦|推荐|評價|评价|review|recommend|rating|比較.{0,6}(哪個|哪个)|vs\.?\s)/i.test(m)
      && /(品牌|牌子|產品|产品|手機|手机|電腦|电脑|laptop|phone|camera|app|軟體|软件|software|car|車|hotel|酒店|餐廳|餐厅|restaurant)/i.test(m))
@@ -1573,6 +1720,12 @@ function shouldSearch(msg){
   // Translation
   const translateRe = /^(翻譯|翻译|幫我翻|帮我翻|translate|翻訳して|번역해|traduce|traduire|übersetze|traduza)\b/i;
   if(translateRe.test(m)) return { needed: false, reason: 'translation' };
+
+  // Year references (current or last year — likely wants fresh info).
+  // Placed after creative/translation skips so e.g. "幫我寫一篇 2026 年的故事" is not forced to search.
+  const yr = new Date().getFullYear();
+  if(new RegExp(`\\b(${yr}|${yr - 1})\\b`).test(m))
+    return { needed: true, reason: 'year-ref' };
 
   // Summarize / rewrite / proofread
   const rewriteRe = /^(總結|摘要|概括|重寫|改寫|潤飾|精簡|总结|改写|润色|summarize|summarise|rewrite|paraphrase|proofread|rephrase|shorten|要約して|요약해|résumer|zusammenfassen|resumir)\b/i;
@@ -1663,7 +1816,89 @@ function extractSearchQuery(userMessage){
   return q;
 }
 
-async function performWebSearch(query){
+function getMessageContentString(msg){
+  if(!msg || msg.content == null) return '';
+  const c = msg.content;
+  if(typeof c === 'string') return c;
+  if(Array.isArray(c)) return c.filter(p => p.type === 'text').map(p => p.text).join(' ');
+  return '';
+}
+
+/** 目前使用者訊息之前的對話文字（供擷取主題關鍵字） */
+function getPriorConversationText(messages){
+  if(!messages || messages.length < 2) return '';
+  const end = messages.length - 1;
+  if(messages[end].role !== 'user') return '';
+  let text = '';
+  for(let i = 0; i < end; i++){
+    text += getMessageContentString(messages[i]) + '\n';
+  }
+  return text.slice(-4000);
+}
+
+/**
+ * 從先前對話擷取產品／型號等關鍵字，避免簡短追問（如「中國的價錢」）搜尋時丟失 iPhone 等主題。
+ */
+function extractTopicHintsFromText(text){
+  if(!text || !text.trim()) return [];
+  const hints = [];
+  const seen = new Set();
+  const add = s => {
+    const t = s.trim();
+    if(t.length < 2 || t.length > 48) return;
+    const k = t.toLowerCase();
+    if(seen.has(k)) return;
+    seen.add(k);
+    hints.push(t);
+  };
+  const patterns = [
+    /\biPhone\s*(?:SE|mini|Pro\s*Max|Pro|Max|Plus|Air|e)?\s*\d{1,2}\b/gi,
+    /\b(iPad|MacBook(?:\s+(?:Air|Pro))?|AirPods|Apple\s+Watch|HomePod)\b/gi,
+    /\b(Galaxy\s+S\d+|Galaxy\s+Z\s*\w+|Pixel\s+\d+|Surface\s+\w+)\b/gi,
+    /\b(Meta\s+Quest\s*\d?|PlayStation\s*\d|Xbox\s+\w+)\b/gi,
+    /(小米|華為|华为|三星|榮耀|一加|OPPO|vivo|紅米|红米)[\s\u00b7·]?[\w\u4e00-\u9fff]{0,12}/gi
+  ];
+  for(const re of patterns){
+    let m;
+    const r = new RegExp(re.source, re.flags);
+    while((m = r.exec(text)) !== null){
+      add(m[0]);
+      if(hints.length >= 8) return hints;
+    }
+  }
+  // 僅出現「iPhone」而無型號時仍帶入主題
+  if(hints.length === 0 && /\biPhone\b/i.test(text)) add('iPhone');
+  return hints.slice(0, 5);
+}
+
+/**
+ * 簡短追問且意圖為價格／地點等，但字面上未帶出商品名時，應併入先前對話主題。
+ */
+function shouldAugmentSearchQuery(base){
+  if(!base || base.length > 56) return false;
+  const hasPriceIntent = /(價錢|價格|多少錢|售價|定價|price|cost|pricing|how much)/i.test(base);
+  const locPrice = /^(在|於)?[\u4e00-\u9fff\s]{1,14}(的|在)?(價錢|價格|多少)/.test(base.trim());
+  if(!hasPriceIntent && !locPrice) return false;
+  if(/\b(iPhone|iPad|Galaxy|Pixel|MacBook|小米|華為|华为|三星|Surface|AirPods)\b/i.test(base)) return false;
+  if(/[A-Za-z]{2,}[\w.-]*\d|\d[\w.-]*[A-Za-z]{2,}/.test(base) && base.replace(/\s/g, '').length > 10) return false;
+  return true;
+}
+
+/**
+ * 合併當前訊息與先前對話主題，產生實際搜尋字串與 hints（供 API 訊息加註）。
+ */
+function buildContextualSearchQuery(userMessage, messages){
+  const base = extractSearchQuery(userMessage);
+  const prior = getPriorConversationText(messages);
+  const hints = extractTopicHintsFromText(prior);
+  if(!shouldAugmentSearchQuery(base) || hints.length === 0){
+    return { searchQuery: base, hints: [] };
+  }
+  const merged = `${hints.slice(0, 3).join(' ')} ${base}`.replace(/\s+/g, ' ').trim();
+  return { searchQuery: merged.length > 120 ? merged.slice(0, 120) : merged, hints };
+}
+
+async function performWebSearch(query, contextual){
   if(!query || !query.trim()) return null;
 
   const cfg = await WebSearch.getConfig();
@@ -1683,7 +1918,9 @@ async function performWebSearch(query){
   }
 
   // If message contains URLs, use visited content; also do a search if no URLs or URLs failed
-  const searchQuery = extractSearchQuery(query);
+  const searchQuery = (contextual && contextual.searchQuery)
+    ? contextual.searchQuery.trim()
+    : extractSearchQuery(query);
   let searchResults = null;
 
   if(searchQuery){
@@ -1722,7 +1959,34 @@ async function performWebSearch(query){
     return null;
   }
 
-  return { text, results: allResults, query: searchQuery || query };
+  return { text, results: allResults, query: searchQuery || query, hints: contextual?.hints || [] };
+}
+
+function buildSearchGroundedUserContent(originalContent, searchData){
+  if(!searchData || !searchData.text) return originalContent;
+  const searchBlock =
+    `\n\n[Web search results fetched by Momo AI Bud]\n` +
+    `Search query: ${searchData.query || ''}\n` +
+    `${searchData.text}\n` +
+    `[/Web search results]\n\n` +
+    `Use the web search results above as source context for this answer. ` +
+    `Cite URLs when useful. If the results are insufficient, say what is missing, ` +
+    `but do not say you cannot access the internet because the extension has already fetched these results.`;
+
+  if(typeof originalContent === 'string'){
+    return `${originalContent}${searchBlock}`;
+  }
+  if(Array.isArray(originalContent)){
+    const next = originalContent.map(part => ({ ...part }));
+    const textPart = next.find(part => part && part.type === 'text');
+    if(textPart){
+      textPart.text = `${textPart.text || ''}${searchBlock}`;
+    } else {
+      next.unshift({ type: 'text', text: searchBlock.trim() });
+    }
+    return next;
+  }
+  return `${String(originalContent || '')}${searchBlock}`;
 }
 
 /* ================= Page Context ================= */
@@ -2389,36 +2653,32 @@ async function captureWithReadability(){
   const [{ result: htmlString } = {}] = await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     func: () => {
-      // 添加 base 元素以保持相對 URL 正確
-      let baseEl = document.querySelector('base');
-      if (!baseEl) {
-        baseEl = document.createElement('base');
+      const docClone = document.documentElement.cloneNode(true);
+      const headClone = docClone.querySelector('head');
+      const bodyClone = docClone.querySelector('body');
+
+      // 添加 base 元素到 clone，以保持相對 URL 正確；不要修改原頁 DOM。
+      if (headClone && !headClone.querySelector('base')) {
+        const baseEl = document.createElement('base');
         baseEl.setAttribute('href', window.location.href);
-        document.head.insertBefore(baseEl, document.head.firstChild);
+        headClone.insertBefore(baseEl, headClone.firstChild);
       }
       
-      // 移除隱藏元素
+      // 只清理 clone。不要用 getComputedStyle + remove 操作 live DOM，
+      // 否則部分 SPA / Discourse 站點會被破壞排版。
       const removeHidden = (root) => {
-        const iterator = document.createNodeIterator(
-          root,
-          NodeFilter.SHOW_ELEMENT,
-          (node) => {
-            const name = node.nodeName.toLowerCase();
-            if(['script', 'style', 'noscript'].includes(name)) return NodeFilter.FILTER_REJECT;
-            const style = window.getComputedStyle(node);
-            if(style.display === 'none' || style.visibility === 'hidden') return NodeFilter.FILTER_ACCEPT;
-            return NodeFilter.FILTER_SKIP;
+        root.querySelectorAll('script, style, noscript, [hidden], [aria-hidden="true"]').forEach(n => n.remove());
+        root.querySelectorAll('[style]').forEach(n => {
+          const style = String(n.getAttribute('style') || '').toLowerCase();
+          if(/display\s*:\s*none|visibility\s*:\s*hidden/.test(style)){
+            n.remove();
           }
-        );
-        const toRemove = [];
-        let node;
-        while(node = iterator.nextNode()) toRemove.push(node);
-        toRemove.forEach(n => n.parentNode?.removeChild(n));
+        });
       };
       
-      removeHidden(document.body);
+      if(bodyClone) removeHidden(bodyClone);
       
-      return document.documentElement.outerHTML;
+      return '<!doctype html>\n' + docClone.outerHTML;
     }
   });
   
@@ -3655,9 +3915,10 @@ async function renderSuggestionsIfNeeded(){
 function syncSystemMessage(){
   const session=getCurrentSession(); if(!session)return;
 
-  // OpenClaw 不使用自訂系統提示詞（Agent 自帶 prompt），跳過同步但保留現有內容
-  const model = els.modelSelector?.value || '';
-  if(model.startsWith('openclaw:') || model.startsWith('agent:')){
+  // Agent provider 不使用自訂系統提示詞（Agent 自帶 prompt / memory），跳過同步但保留現有內容
+  const selectedUid = els.modelSelector?.value || '';
+  const providerId = selectedUid.split('::')[0] || '';
+  if(isAgentProviderId(providerId)){
     return; // 不修改也不刪除，僅跳過
   }
 
@@ -5189,6 +5450,243 @@ function fileToBase64(file){
   });
 }
 
+function dataUrlToImageUpload(dataUrl, name){
+  const m = /^data:([^;]+);base64,(.+)$/i.exec(dataUrl || '');
+  if(!m) throw new Error('Invalid screenshot data');
+  return { type: m[1], data: m[2], name };
+}
+
+function estimateBase64Bytes(base64){
+  if(!base64) return 0;
+  const padding = base64.endsWith('==') ? 2 : (base64.endsWith('=') ? 1 : 0);
+  return Math.floor(base64.length * 3 / 4) - padding;
+}
+
+async function captureVisibleTabDataUrl(windowId, options){
+  return new Promise((resolve, reject)=>{
+    chrome.tabs.captureVisibleTab(windowId, options, dataUrl => {
+      const err = chrome.runtime.lastError;
+      if(err) reject(new Error(err.message));
+      else resolve(dataUrl);
+    });
+  });
+}
+
+async function requestScreenshotArea(tabId, hintText){
+  const [{ result } = {}] = await chrome.scripting.executeScript({
+    target: { tabId },
+    args: [hintText],
+    func: (hintText) => new Promise(resolve => {
+      const existing = document.getElementById('momo-screenshot-select-overlay');
+      if(existing) existing.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'momo-screenshot-select-overlay';
+      overlay.style.cssText = [
+        'position:fixed',
+        'inset:0',
+        'z-index:2147483647',
+        'cursor:crosshair',
+        'background:rgba(0,0,0,.18)',
+        'user-select:none'
+      ].join(';');
+
+      const hint = document.createElement('div');
+      hint.textContent = hintText || 'Drag to select. Double-click for full visible page. Esc to cancel.';
+      hint.style.cssText = [
+        'position:fixed',
+        'left:50%',
+        'top:18px',
+        'transform:translateX(-50%)',
+        'padding:8px 12px',
+        'border-radius:8px',
+        'background:rgba(20,20,24,.88)',
+        'color:#fff',
+        'font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+        'box-shadow:0 4px 18px rgba(0,0,0,.24)',
+        'pointer-events:none',
+        'white-space:nowrap'
+      ].join(';');
+      overlay.appendChild(hint);
+
+      const box = document.createElement('div');
+      box.style.cssText = [
+        'position:fixed',
+        'border:2px solid #8ea0ff',
+        'background:rgba(142,160,255,.18)',
+        'box-shadow:0 0 0 99999px rgba(0,0,0,.22)',
+        'display:none',
+        'pointer-events:none'
+      ].join(';');
+      overlay.appendChild(box);
+
+      let startX = 0;
+      let startY = 0;
+      let dragging = false;
+      let settled = false;
+
+      const cleanup = value => {
+        if(settled) return;
+        settled = true;
+        window.removeEventListener('keydown', onKeyDown, true);
+        overlay.remove();
+        resolve(value);
+      };
+
+      const rectFrom = (x1, y1, x2, y2) => {
+        const left = Math.max(0, Math.min(x1, x2));
+        const top = Math.max(0, Math.min(y1, y2));
+        const right = Math.min(window.innerWidth, Math.max(x1, x2));
+        const bottom = Math.min(window.innerHeight, Math.max(y1, y2));
+        return { left, top, width: right - left, height: bottom - top };
+      };
+
+      const draw = rect => {
+        box.style.display = 'block';
+        box.style.left = rect.left + 'px';
+        box.style.top = rect.top + 'px';
+        box.style.width = rect.width + 'px';
+        box.style.height = rect.height + 'px';
+      };
+
+      const onKeyDown = e => {
+        if(e.key === 'Escape'){
+          e.preventDefault();
+          e.stopPropagation();
+          cleanup(null);
+        }
+      };
+
+      overlay.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        cleanup(null);
+      }, true);
+
+      overlay.addEventListener('dblclick', e => {
+        e.preventDefault();
+        cleanup({
+          rect: { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight },
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          devicePixelRatio: window.devicePixelRatio || 1
+        });
+      }, true);
+
+      overlay.addEventListener('mousedown', e => {
+        if(e.button !== 0) return;
+        e.preventDefault();
+        startX = e.clientX;
+        startY = e.clientY;
+        dragging = true;
+        draw({ left: startX, top: startY, width: 0, height: 0 });
+      }, true);
+
+      overlay.addEventListener('mousemove', e => {
+        if(!dragging) return;
+        e.preventDefault();
+        draw(rectFrom(startX, startY, e.clientX, e.clientY));
+      }, true);
+
+      overlay.addEventListener('mouseup', e => {
+        if(!dragging) return;
+        e.preventDefault();
+        dragging = false;
+        const rect = rectFrom(startX, startY, e.clientX, e.clientY);
+        if(rect.width < 8 || rect.height < 8){
+          box.style.display = 'none';
+          return;
+        }
+        cleanup({
+          rect,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          devicePixelRatio: window.devicePixelRatio || 1
+        });
+      }, true);
+
+      window.addEventListener('keydown', onKeyDown, true);
+      document.documentElement.appendChild(overlay);
+    })
+  });
+  return result || null;
+}
+
+async function cropImageDataUrl(dataUrl, selection, outputType = 'image/png', quality){
+  return new Promise((resolve, reject)=>{
+    const image = new Image();
+    image.onload = () => {
+      try{
+        const scaleX = image.naturalWidth / Math.max(1, selection.viewport.width);
+        const scaleY = image.naturalHeight / Math.max(1, selection.viewport.height);
+        const sx = Math.round(selection.rect.left * scaleX);
+        const sy = Math.round(selection.rect.top * scaleY);
+        const sw = Math.max(1, Math.round(selection.rect.width * scaleX));
+        const sh = Math.max(1, Math.round(selection.rect.height * scaleY));
+        const canvas = document.createElement('canvas');
+        canvas.width = sw;
+        canvas.height = sh;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, sx, sy, sw, sh, 0, 0, sw, sh);
+        resolve(canvas.toDataURL(outputType, quality));
+      }catch(e){
+        reject(e);
+      }
+    };
+    image.onerror = reject;
+    image.src = dataUrl;
+  });
+}
+
+async function ensureScreenshotCapturePermission(){
+  if(!chrome.permissions) return true;
+  try{
+    const origins = ['<all_urls>'];
+    return await new Promise(resolve => chrome.permissions.request({ origins }, resolve));
+  }catch(e){
+    console.warn('[screenshot] permission request failed:', e);
+    return false;
+  }
+}
+
+async function handleScreenshotUpload(){
+  try{
+    const hasCapturePermission = await ensureScreenshotCapturePermission();
+    if(!hasCapturePermission){
+      showAlert(sp_t('permissionCancelled'));
+      return;
+    }
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if(!tab?.id || !tab?.windowId) throw new Error('No active tab');
+
+    const selection = await requestScreenshotArea(tab.id, sp_t('screenshotSelectHint'));
+    if(!selection) return;
+
+    let fullDataUrl = await captureVisibleTabDataUrl(tab.windowId, { format: 'png' });
+    let dataUrl = await cropImageDataUrl(fullDataUrl, selection, 'image/png');
+    let img = dataUrlToImageUpload(dataUrl, `screenshot-${Date.now()}.png`);
+
+    if(estimateBase64Bytes(img.data) > 5 * 1024 * 1024){
+      fullDataUrl = await captureVisibleTabDataUrl(tab.windowId, { format: 'jpeg', quality: 92 });
+      dataUrl = await cropImageDataUrl(fullDataUrl, selection, 'image/jpeg', 0.92);
+      img = dataUrlToImageUpload(dataUrl, `screenshot-${Date.now()}.jpg`);
+    }
+    if(estimateBase64Bytes(img.data) > 5 * 1024 * 1024){
+      showAlert(sp_t('screenshotTooLarge') || 'Screenshot is too large. Please reduce the browser window size and try again.');
+      return;
+    }
+
+    uploadedImages.push(img);
+    renderImagePreviews();
+    updateTextareaLayout();
+    updateSendButtonState();
+    if(!streaming){
+      await onSend();
+    }
+  }catch(err){
+    console.error('[screenshot] capture failed:', err);
+    showAlert(sp_tpl('screenshotFailed', { msg: err.message || String(err) }) || `Screenshot failed: ${err.message || err}`);
+  }
+}
+
 function renderImagePreviews(){
   if(!uploadedImages.length){
     els.imagePreviewContainer.style.display = 'none';
@@ -5252,8 +5750,9 @@ async function onSend(){
   
   // 檢查是否有內容可發送（文字、圖片或頁面內容）
   const session=getCurrentSession();
+  const isAgentProvider = await isCurrentModelAgentProvider();
   // 只檢查等待使用的頁面內容（而不是所有歷史頁面內容）
-  const hasPendingPageContent = session ? session.messages.some(m => m._pendingPageContext) : false;
+  const hasPendingPageContent = !isAgentProvider && session ? session.messages.some(m => m._pendingPageContext) : false;
   
   if(!text && !uploadedImages.length && !hasPendingPageContent) {
     console.log('[SP] Empty text, no images, and no pending page content, return');
@@ -5298,8 +5797,6 @@ async function onSend(){
     persistSessions(); // 保存更改
   }
 
-  // 當沒有輸入文字時，用戶訊息保持空白（只顯示標籤）
-  // 頁面內容會保留為 system 消息，在 API 調用時一起發送
   let finalText = text;
 
   // 如果有圖片，使用多模態格式
@@ -5361,9 +5858,10 @@ function updateSendButtonState(){
   const hasText = !!els.messageInput.value.trim();
   const hasImages = uploadedImages.length > 0;
   
-  // 檢查當前會話是否有頁面內容
+  // 檢查當前會話是否有等待送出的頁面內容
   const session = getCurrentSession();
-  const hasPageContent = session ? session.messages.some(m => m._pageContext) : false;
+  const selectedProvider = (els.modelSelector?.value || '').split('::')[0] || '';
+  const hasPageContent = !isAgentProviderId(selectedProvider) && session ? session.messages.some(m => m._pendingPageContext) : false;
   
   // 有文字、圖片或頁面內容其中之一，就可以發送
   const canSend = hasText || hasImages || hasPageContent;
@@ -5433,6 +5931,47 @@ async function guardHostPermission(apiEndpoint){
 }
 
 /* Streaming */
+function getHermesExtensionOrigin(){
+  return chrome?.runtime?.id ? `chrome-extension://${chrome.runtime.id}` : 'chrome-extension://<extension-id>';
+}
+
+function buildHermesConnectionError(status, bodyText, fallbackMessage){
+  const body = (bodyText || '').trim();
+  const origin = getHermesExtensionOrigin();
+  const detail = body ? ` ${body.slice(0, 200)}` : '';
+  if(status === 401 || status === 403){
+    return `HTTP ${status}${detail}\nHermes refused the request. Check that this API key exactly matches API_SERVER_KEY. If Hermes is not running through a server-side proxy, set API_SERVER_CORS_ORIGINS=${origin} on the Hermes host and restart hermes gateway.`;
+  }
+  if(status === 0){
+    return `${fallbackMessage || 'Connection failed'}\nFor direct browser access to Hermes, set API_SERVER_CORS_ORIGINS=${origin} on the Hermes host and restart hermes gateway.`;
+  }
+  return fallbackMessage || `HTTP ${status}${detail}`;
+}
+
+function proxyFetchViaBackground(url, options){
+  return new Promise(resolve => {
+    chrome.runtime.sendMessage({ type:'proxy_fetch', url, options }, res => {
+      const err = chrome.runtime.lastError;
+      if(err) resolve({ ok:false, status:0, text:'', error:err.message });
+      else resolve(res || { ok:false, status:0, text:'', error:'empty proxy response' });
+    });
+  });
+}
+
+function extractOpenAICompletionText(payload){
+  const msg = payload?.choices?.[0]?.message;
+  const content = msg?.content;
+  if(typeof content === 'string') return content;
+  if(Array.isArray(content)){
+    return content
+      .map(p => typeof p === 'string' ? p : (p?.text || p?.content || ''))
+      .filter(Boolean)
+      .join('\n');
+  }
+  const text = payload?.choices?.[0]?.text;
+  return typeof text === 'string' ? text : '';
+}
+
 async function streamChatCompletion(assistantTs){
   console.log('[SP] streamChatCompletion() called');
   
@@ -5457,6 +5996,7 @@ async function streamChatCompletion(assistantTs){
     console.log('[SP] OpenClaw detected, routing to WebSocket chat');
     return streamOpenClawChat(assistantTs);
   }
+  const isAgentProvider = isAgentProviderId(modelProvider, providerConfigs);
   
   // Get API config for this provider
   let apiKey = '';
@@ -5494,7 +6034,8 @@ async function streamChatCompletion(assistantTs){
   // 過濾掉當前正在流式輸出的空 assistant 消息（避免發送到 API）
   const messages=session.messages
     .filter(m => !(m.ts === assistantTs && m._streaming && !m.content))
-    .map(m => ({ role: m.role, content: m.content }));
+    .filter(m => !(isAgentProvider && m.role === 'system'))
+    .map(m => ({ role: m.role, content: getApiMessageContent(m) }));
 
   // ── 聯網搜尋 ──
   let userQuery = '';
@@ -5507,21 +6048,26 @@ async function streamChatCompletion(assistantTs){
       break;
     }
   }
-  const searchCheck = shouldSearch(userQuery);
-  const autoTrigger = !webSearchEnabled && searchCheck.needed && searchCheck.reason === 'explicit-search';
-  const doSearch = webSearchEnabled || autoTrigger;
-  const searchNeeded = doSearch && userQuery && lastUserIdx >= 0 && (webSearchEnabled || searchCheck.needed);
+  const searchCheck = isAgentProvider ? { needed:false, reason:'agent-provider' } : shouldSearch(userQuery);
+  const autoTrigger = !isAgentProvider && !webSearchEnabled && searchCheck.needed && searchCheck.reason === 'explicit-search';
+  const doSearch = !isAgentProvider && (webSearchEnabled || autoTrigger);
+  const searchNeeded = doSearch && userQuery && lastUserIdx >= 0 && searchCheck.needed;
   const isOpenRouter = modelProvider === 'openrouter';
-  // OpenRouter: use server-side :online suffix instead of client-side search
-  const useOpenRouterOnline = searchNeeded && isOpenRouter;
-  const useClientSearch = searchNeeded && !isOpenRouter;
+  // Use client-side search whenever possible so every model receives the same grounded source context.
+  // OpenRouter :online is kept as a fallback only when local search returns no usable results.
+  let useOpenRouterOnline = false;
+  const useClientSearch = searchNeeded;
+  const searchContext = userQuery
+    ? buildContextualSearchQuery(userQuery, messages)
+    : { searchQuery: '', hints: [] };
   console.log('[SP] webSearchEnabled =', webSearchEnabled, '| autoTrigger =', autoTrigger,
     '| shouldSearch:', searchCheck.needed, searchCheck.reason,
-    '| openrouter:', useOpenRouterOnline, '| query:', userQuery?.slice(0,60));
+    '| query:', userQuery?.slice(0,60),
+    '| searchContext:', searchContext.searchQuery?.slice(0, 80), searchContext.hints);
   if(useClientSearch){
     updateThinkingStatus(assistantTs, sp_t('webSearching'));
     try {
-      const searchData = await performWebSearch(userQuery);
+      const searchData = await performWebSearch(userQuery, searchContext);
       console.log('[SP] Web search result:', searchData ? searchData.text.length + ' chars' : 'null');
       if(searchData){
         const today = new Date().toISOString().slice(0,10);
@@ -5544,15 +6090,41 @@ async function streamChatCompletion(assistantTs){
         } else {
           messages.unshift({ role: 'system', content: searchSystemContent });
         }
+        const u = messages[lastUserIdx];
+        if(u && u.role === 'user'){
+          messages[lastUserIdx] = {
+            ...u,
+            content: buildSearchGroundedUserContent(u.content, searchData)
+          };
+        }
         const assistantMsg = session.messages.find(m => m.ts === assistantTs);
         if(assistantMsg){
           assistantMsg._webSearchResults = searchData.results;
           assistantMsg._webSearchQuery = searchData.query;
         }
         console.log('[SP] Web search prompt overrode system prompt | chars:', searchData.text.length);
+      } else if(isOpenRouter){
+        useOpenRouterOnline = true;
+        console.log('[SP] Client search returned no results; falling back to OpenRouter :online');
       }
     } catch(searchErr) {
       console.error('[SP] Web search error in streamChatCompletion:', searchErr);
+      if(isOpenRouter){
+        useOpenRouterOnline = true;
+        console.log('[SP] Client search failed; falling back to OpenRouter :online');
+      }
+    }
+  }
+
+  // 簡短追問（如「中國的價錢」）在送 API 時附上先前對話中的主題詞，避免模型／OpenRouter :online 搜尋脫離上下文
+  if(searchContext.hints.length > 0 && shouldAugmentSearchQuery(extractSearchQuery(userQuery)) && lastUserIdx >= 0){
+    const u = messages[lastUserIdx];
+    if(u && u.role === 'user' && typeof u.content === 'string'){
+      const orig = u.content;
+      messages[lastUserIdx] = {
+        ...u,
+        content: `(Related topic from earlier in the conversation: ${searchContext.hints.slice(0, 4).join(', ')})\n\n${orig}`
+      };
     }
   }
 
@@ -5607,6 +6179,38 @@ async function streamChatCompletion(assistantTs){
     // deepseek-reasoner / o1 / o3：內建思考，不需帶參數
   }
 
+  if(modelProvider === 'hermes'){
+    const hermesBody = {
+      model: 'hermes-agent',
+      messages,
+      stream: false
+    };
+    const proxied = await proxyFetchViaBackground(url, {
+      method:'POST',
+      headers: {
+        'Content-Type':'application/json',
+        ...(apiKey ? { 'Authorization':'Bearer '+apiKey } : {})
+      },
+      body: JSON.stringify(hermesBody)
+    });
+    hideThinkingDots(assistantTs);
+    if(!proxied.ok){
+      throw new Error(buildHermesConnectionError(proxied.status || 0, proxied.text || proxied.error || ''));
+    }
+    let data;
+    try{
+      data = JSON.parse(proxied.text || '{}');
+    }catch(e){
+      throw new Error('Hermes returned non-JSON response: ' + (proxied.text || '').slice(0, 200));
+    }
+    const text = extractOpenAICompletionText(data).trim();
+    if(!text) throw new Error('Hermes returned an empty response.');
+    replaceMessageContent(assistantTs, text, true);
+    finalizeStreamingMessage(assistantTs);
+    finalizeAssistantMessageContent(assistantTs, text);
+    return;
+  }
+
   streamAbortController=new AbortController();
   let resp;
   try{
@@ -5622,6 +6226,9 @@ async function streamChatCompletion(assistantTs){
   }catch(e){
     console.error('[SP] Fetch error:', e);
     hideThinkingDots(assistantTs);
+    if(modelProvider === 'hermes'){
+      throw new Error(buildHermesConnectionError(0, '', 'Connection failed: ' + e.message));
+    }
     throw new Error('Connection failed: '+e.message);
   }
 
@@ -5629,6 +6236,9 @@ async function streamChatCompletion(assistantTs){
     const t=await resp.text();
     console.error('[SP] HTTP error:', resp.status, t.slice(0,200));
     hideThinkingDots(assistantTs);
+    if(modelProvider === 'hermes'){
+      throw new Error(buildHermesConnectionError(resp.status, t));
+    }
     throw new Error(`HTTP ${resp.status} ${t.slice(0,200)}`);
   }
 
@@ -5987,39 +6597,25 @@ function autoGrow(el,{force=false}={}){
   
   const raw=el.value;
   if(!raw.length || force){
-    el.style.height=COMPOSER_BASE_HEIGHT+'px';
+    const baseHeight = COMPOSER_BASE_HEIGHT + 'px';
+    if(el.style.height !== baseHeight) el.style.height=baseHeight;
     if(!raw.length){
       if(el===els.messageInput) lastComposerHeight = COMPOSER_BASE_HEIGHT;
       positionScrollButton();
       return;
     }
   }
-  el.style.height=COMPOSER_BASE_HEIGHT+'px';
+  el.style.height='auto';
   let h=el.scrollHeight;
   if(h<COMPOSER_BASE_HEIGHT) h=COMPOSER_BASE_HEIGHT;
   if(h>COMPOSER_MAX_HEIGHT) h=COMPOSER_MAX_HEIGHT;
-  el.style.height=h+'px';
+  const nextHeight = h + 'px';
+  if(el.style.height !== nextHeight) el.style.height=nextHeight;
   
   // 恢復輸入框的滾動位置，避免在編輯頂部文字時跳動
   el.scrollTop = savedScrollTop;
   
   if(el===els.messageInput){
-    if(h > lastComposerHeight && h > COMPOSER_BASE_HEIGHT + 20){
-      // 輸入框高度增加時，只在用戶本來就在底部附近時才滾動對話窗口
-      const scroller = getScrollContainer();
-      if(scroller) {
-        const maxScroll = scroller.scrollHeight - scroller.clientHeight;
-        const currentScroll = scroller.scrollTop;
-        // 只有當用戶在接近底部（距離底部 100px 以內）時才自動滾動
-        if(maxScroll - currentScroll <= 100) {
-          setTimeout(() => {
-            _programmaticScroll = true;
-            scroller.scrollTop = scroller.scrollHeight - scroller.clientHeight;
-            setTimeout(()=>{ _programmaticScroll = false; }, 50);
-          }, 0);
-        }
-      }
-    }
     lastComposerHeight = h;
   }
   positionScrollButton();

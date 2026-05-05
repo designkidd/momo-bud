@@ -75,8 +75,23 @@
 <ul>
   <li><strong>Ollama</strong>: <code>localhost:11434/v1</code> — Free local models.</li>
   <li><strong>LM Studio</strong>: <code>localhost:1234/v1</code> — GUI for managing local models.</li>
+  <li><strong>Hermes (Beta)</strong>: <code>127.0.0.1:8642/v1</code> — OpenAI-compatible API Server for a local agent; default model is <code>hermes-agent</code>.</li>
   <li><strong>OpenClaw (Beta)</strong>: <code>ws://127.0.0.1:18789</code> — WebSocket protocol.</li>
 </ul>
+
+<h2>Hermes (Beta) Setup</h2>
+<p>Hermes connects through its OpenAI-compatible HTTP API. Like OpenClaw, it needs gateway / API Server values in the Hermes <code>.env</code> before Momo can connect.</p>
+<pre><code>API_SERVER_ENABLED=true
+API_SERVER_HOST=0.0.0.0
+API_SERVER_PORT=8642
+API_SERVER_KEY=&lt;your-secret-key&gt;
+API_SERVER_CORS_ORIGINS=*</code></pre>
+<ol>
+  <li>Edit the Hermes <code>.env</code> values above. Use your own secret for <code>API_SERVER_KEY</code>; do not use the placeholder.</li>
+  <li>For remote access or direct Chrome extension access, <code>API_SERVER_CORS_ORIGINS=*</code> is the simplest working setting. For stricter deployments, replace it with trusted origins only.</li>
+  <li>Restart the Hermes Gateway. By default it listens on <code>http://127.0.0.1:8642</code>.</li>
+  <li>Select <strong>Hermes (beta)</strong> in Momo, keep the default Base URL or enter your remote URL, then enable the <code>hermes-agent</code> model.</li>
+</ol>
 
 <h2>Configuring a Provider</h2>
 <ol>

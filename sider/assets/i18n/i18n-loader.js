@@ -140,6 +140,14 @@
       const key = el.getAttribute('data-i18n-aria-label');
       if (t[key]) el.setAttribute('aria-label', t[key]);
     });
+
+    // 瀏覽器分頁標題（options / sidepanel 的 <title> 僅為載入前後備，實際以語系為準）
+    const pageFile = (location.pathname || '').split('/').pop() || '';
+    if (pageFile === 'options.html' && t.optionsDocumentTitle) {
+      document.title = t.optionsDocumentTitle;
+    } else if (pageFile === 'sidepanel.html' && t.sidepanelDocumentTitle) {
+      document.title = t.sidepanelDocumentTitle;
+    }
     
     console.log(`[i18n] Applied translations for: ${lang}`);
   };

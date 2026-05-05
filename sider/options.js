@@ -235,7 +235,7 @@ function updateProviderSelectButton(providerId){
     icon.src = PROVIDER_ICONS[providerId] || 'assets/icons/custom.svg';
     icon.alt = provider.name;
   }
-  if(name) name.textContent = provider.name + (provider.isOpenClaw ? ' (beta)' : '');
+  if(name) name.textContent = provider.name + ((provider.isOpenClaw || provider.isBeta) ? ' (beta)' : '');
 }
 
 const THINKING_HINTS_I18N = {
@@ -274,6 +274,31 @@ function updateThinkingHint(providerId){
   const base = hints[providerId] || hints._default;
   el.innerHTML = base + hints._prefix;
 }
+
+function isConnectFirstProvider(providerId){
+  const d = PROVIDER_DEFAULTS[providerId];
+  return !!(d?.isOpenClaw || d?.isAgentProvider);
+}
+
+function getProviderPrimaryModelName(providerId){
+  const d = PROVIDER_DEFAULTS[providerId];
+  return d?.models?.[0] || providerId || '';
+}
+
+function setProviderPrimaryModelEnabled(providerId, enabled){
+  const provider = providersData[providerId];
+  const modelName = getProviderPrimaryModelName(providerId);
+  if(!provider || !modelName) return;
+  if(!provider.models) provider.models = [];
+  const existing = provider.models.find(m => m.name === modelName);
+  if(existing){
+    existing.enabled = enabled;
+    existing.provider = providerId;
+  } else {
+    provider.models.push({ name: modelName, enabled, provider: providerId });
+  }
+}
+
 function switchProvider(providerId){
   if(!PROVIDER_DEFAULTS[providerId]) return;
   
@@ -342,12 +367,14 @@ function loadProviderConfig(providerId){
       minimax: 'https://platform.minimax.io/user-center/basic-information/interface-key',
       openrouter: 'https://openrouter.ai/keys',
       ollama: 'https://ollama.com/settings/keys',
-      groq: 'https://console.groq.com/keys'
+      groq: 'https://console.groq.com/keys',
+      hermes: 'https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server'
     };
     
     // Provider-specific extra hints
     const providerExtraHints = {
-      groq: 'Free tier: ~30 req/min, up to 14,400 req/day. No credit card required. Supports Llama, DeepSeek-R1 & more. Ultra-fast inference. <a href="https://console.groq.com/docs/rate-limits" target="_blank" style="color:var(--accent);text-decoration:underline;">Rate limits →</a>'
+      groq: 'Free tier: ~30 req/min, up to 14,400 req/day. No credit card required. Supports Llama, DeepSeek-R1 & more. Ultra-fast inference. <a href="https://console.groq.com/docs/rate-limits" target="_blank" style="color:var(--accent);text-decoration:underline;">Rate limits →</a>',
+      hermes: 'Hermes Agent API Server must be enabled in the Hermes <code>.env</code>, similar to OpenClaw gateway setup. Set <code>API_SERVER_ENABLED=true</code>, <code>API_SERVER_HOST=0.0.0.0</code>, <code>API_SERVER_PORT=8642</code>, <code>API_SERVER_KEY=&lt;your-secret-key&gt;</code>, and <code>API_SERVER_CORS_ORIGINS=*</code>, then restart Hermes. Use the same key here. Default API URL is <code>http://127.0.0.1:8642/v1</code>.'
     };
 
     if(apiKeyLinks[providerId]){
@@ -366,17 +393,21 @@ function loadProviderConfig(providerId){
     els.providerApiKey.value = provider.apiKey || '';
   }
 
-  // OpenClaw-specific: simple toggle, tutorial, test, session
+  // Connect-first agent providers: simple toggle, connect button, optional session UI
   {
     const isOpenClaw = !!PROVIDER_DEFAULTS[providerId]?.isOpenClaw;
-    if(els.secModels) els.secModels.classList.toggle('hidden', isOpenClaw);
-    if(els.secOpenclawToggle) els.secOpenclawToggle.classList.toggle('hidden', !isOpenClaw);
-    if(els.testConnectionField) els.testConnectionField.classList.toggle('hidden', isOpenClaw);
-    if(els.openclawTestRow) els.openclawTestRow.classList.toggle('hidden', !isOpenClaw);
-    if(isOpenClaw && els.openclawModelToggle){
+    const isConnectFirst = isConnectFirstProvider(providerId);
+    if(els.secModels) els.secModels.classList.toggle('hidden', isConnectFirst);
+    if(els.secOpenclawToggle) els.secOpenclawToggle.classList.toggle('hidden', !isConnectFirst);
+    if(els.testConnectionField) els.testConnectionField.classList.toggle('hidden', isConnectFirst);
+    if(els.openclawTestRow) els.openclawTestRow.classList.toggle('hidden', !isConnectFirst);
+    if(els.btnOpenClawTutorial) els.btnOpenClawTutorial.classList.toggle('hidden', !isConnectFirst);
+    if(els.agentModelName) els.agentModelName.textContent = getProviderPrimaryModelName(providerId);
+    if(isConnectFirst && els.openclawModelToggle){
       // Default: off + disabled until connected
       els.openclawModelToggle.checked = false;
       els.openclawModelToggle.disabled = true;
+      setProviderPrimaryModelEnabled(providerId, false);
     }
   }
   if(els.openclawSessionKeyField){
@@ -393,20 +424,20 @@ function loadProviderConfig(providerId){
   }
 
   // OpenClaw-specific: update labels/hints
+  const apiKeyLabel = document.querySelector('label[for="providerApiKey"]');
+  if(apiKeyLabel && apiKeyLabel.hasAttribute('data-provider-key-original')){
+    apiKeyLabel.textContent = apiKeyLabel.getAttribute('data-provider-key-original');
+    apiKeyLabel.removeAttribute('data-provider-key-original');
+  }
   if(PROVIDER_DEFAULTS[providerId]?.isOpenClaw){
     if(els.providerBaseUrl) els.providerBaseUrl.placeholder = t('openclawWsPlaceholder');
     if(els.providerBaseUrlHint) els.providerBaseUrlHint.innerHTML = tpl('openclawWsHint',{url:defaultUrl});
     // Rename API Key label hint for OpenClaw
-    const apiKeyLabel = document.querySelector('label[for="providerApiKey"]');
-    if(apiKeyLabel) apiKeyLabel.setAttribute('data-openclaw-original', apiKeyLabel.textContent);
+    if(apiKeyLabel) apiKeyLabel.setAttribute('data-provider-key-original', apiKeyLabel.textContent);
     if(apiKeyLabel) apiKeyLabel.textContent = 'Gateway Token';
-  } else {
-    // Restore API Key label if switching away from OpenClaw
-    const apiKeyLabel = document.querySelector('label[for="providerApiKey"]');
-    if(apiKeyLabel && apiKeyLabel.hasAttribute('data-openclaw-original')){
-      apiKeyLabel.textContent = apiKeyLabel.getAttribute('data-openclaw-original');
-      apiKeyLabel.removeAttribute('data-openclaw-original');
-    }
+  } else if(PROVIDER_DEFAULTS[providerId]?.isAgentProvider){
+    if(apiKeyLabel) apiKeyLabel.setAttribute('data-provider-key-original', apiKeyLabel.textContent);
+    if(apiKeyLabel) apiKeyLabel.textContent = 'API Server Key';
   }
 
   // Thinking mode is now per-model (in model row dropdown), no provider-level toggle needed
@@ -456,9 +487,13 @@ function saveCurrentProviderConfig(){
   
   // Collect current models from UI
   let currentModels;
-  if(PROVIDER_DEFAULTS[currentProvider]?.isOpenClaw && els.openclawModelToggle){
-    // OpenClaw uses simple toggle, not model list
-    currentModels = [{ name: 'openclaw', enabled: els.openclawModelToggle.checked, provider: currentProvider }];
+  if(isConnectFirstProvider(currentProvider) && els.openclawModelToggle){
+    // Connect-first agent providers use a simple toggle, not the editable model list.
+    currentModels = [{
+      name: getProviderPrimaryModelName(currentProvider),
+      enabled: els.openclawModelToggle.checked,
+      provider: currentProvider
+    }];
   } else {
     currentModels = collectModels();
     // 嚴格清理：移除不屬於當前 provider 的模型（防止跨 provider 污染）
@@ -599,6 +634,7 @@ function cacheDom(){
     btnTestConnectionOC: $('#btnTestConnectionOC'),
     testStatusOC: $('#testStatusOC'),
     btnOpenClawTutorial: $('#btnOpenClawTutorial'),
+    agentModelName: $('#agentModelName'),
     openclawTutorialModal: $('#openclawTutorialModal'),
     thinkingModeField: $('#thinkingModeField'),
     providerEnableThinking: $('#providerEnableThinking'),
@@ -762,9 +798,9 @@ function bindEvents(){
   els.internetSearchOnByDefaultToggle?.addEventListener('change', ()=> saveWebSearchSettings());
   els.testWebSearchBtn?.addEventListener('click', testWebSearch);
 
-  // OpenClaw tutorial modal
+  // Agent provider setup guide modal
   els.btnOpenClawTutorial?.addEventListener('click', ()=>{
-    if(els.openclawTutorialModal) els.openclawTutorialModal.hidden = false;
+    showAgentSetupGuide(currentProvider);
   });
   document.querySelectorAll('.openclaw-tutorial-close').forEach(btn=>{
     btn.addEventListener('click', ()=>{
@@ -903,19 +939,11 @@ function bindEvents(){
   // 模型
   els.btnAddModel.addEventListener('click',()=>addModelRow({name:'',enabled:true},true));
 
-  // OpenClaw simple toggle
+  // Connect-first agent provider simple toggle
   if(els.openclawModelToggle){
     els.openclawModelToggle.addEventListener('change', ()=>{
       const enabled = els.openclawModelToggle.checked;
-      const provider = providersData[currentProvider];
-      if(!provider) return;
-      if(!provider.models) provider.models = [];
-      const existing = provider.models.find(m => m.name === 'openclaw');
-      if(existing){
-        existing.enabled = enabled;
-      } else {
-        provider.models.push({ name: 'openclaw', enabled });
-      }
+      setProviderPrimaryModelEnabled(currentProvider, enabled);
       saveCurrentProviderConfig();
     });
   }
@@ -1350,6 +1378,22 @@ function bindTtsEvents(){
   }
 }
 
+function showAgentSetupGuide(providerId){
+  if(!els.openclawTutorialModal) return;
+  const isHermes = providerId === 'hermes';
+  const title = $('#agentTutorialTitle');
+  const openclawContent = $('#openclawTutorialContent');
+  const hermesContent = $('#hermesTutorialContent');
+  if(title){
+    title.innerHTML = isHermes
+      ? 'Hermes <span class="beta-text">(beta)</span>'
+      : 'OpenClaw <span class="beta-text">(beta)</span>';
+  }
+  if(openclawContent) openclawContent.hidden = isHermes;
+  if(hermesContent) hermesContent.hidden = !isHermes;
+  els.openclawTutorialModal.hidden = false;
+}
+
 function applyCaptureModeUI(mode, values){
   if(!els.captureModeSelect || !els.includeSelectorInput || !els.excludeSelectorInput || !els.customCaptureFields) return;
   const hasPreset=Boolean(CAPTURE_PRESETS[mode]);
@@ -1497,7 +1541,7 @@ async function ensureHostPermission(ep){
   }catch(e){ return {granted:false, error:e}; }
 }
 
-function disconnectOpenClaw(){
+function disconnectAgentProvider(){
   const ocBtn = els.btnTestConnectionOC;
   if(ocBtn){
     ocBtn.textContent = t('openclawConnect');
@@ -1515,7 +1559,26 @@ function disconnectOpenClaw(){
     els.openclawSessionKey.innerHTML = '<option value="">-- Connect to load Sessions --</option>';
   }
   setTestStatus('','');
-  console.log('[OpenClaw] Disconnected');
+  console.log('[Agent Provider] Disconnected:', currentProvider);
+}
+
+const disconnectOpenClaw = disconnectAgentProvider;
+
+function enableConnectedAgentModel(){
+  if(els.openclawModelToggle){
+    els.openclawModelToggle.disabled = false;
+    els.openclawModelToggle.checked = true;
+    els.openclawModelToggle.dispatchEvent(new Event('change'));
+  }
+}
+
+function getHttpStatusMessage(resp, bodyText){
+  const body = (bodyText || '').slice(0, 160);
+  if(resp.status === 401 || resp.status === 403){
+    const origin = chrome?.runtime?.id ? `chrome-extension://${chrome.runtime.id}` : 'chrome-extension://<extension-id>';
+    return `HTTP ${resp.status} auth/CORS rejected. Check API_SERVER_KEY and set API_SERVER_CORS_ORIGINS=${origin}, then restart hermes gateway. ${body}`.trim();
+  }
+  return `HTTP ${resp.status} ${body}`.trim();
 }
 
 async function testConnection(){
@@ -1591,11 +1654,7 @@ async function testConnection(){
       ocBtn.disabled=false;
       ocBtn.classList.add('btn-connected');
       // Enable model toggle and turn on
-      if(els.openclawModelToggle){
-        els.openclawModelToggle.disabled = false;
-        els.openclawModelToggle.checked = true;
-        els.openclawModelToggle.dispatchEvent(new Event('change'));
-      }
+      enableConnectedAgentModel();
       // Auto-load sessions after successful connect
       loadOpenClawSessions();
     }catch(e){
@@ -1605,6 +1664,82 @@ async function testConnection(){
     }finally{
       clearTimeout(timer);
       try{ ws?.close(); }catch(e){}
+    }
+    return;
+  }
+
+  /* ── Hermes：HTTP API Server 連線測試；成功後自動啟用模型 ── */
+  if(PROVIDER_DEFAULTS[currentProvider]?.isAgentProvider){
+    const hBtn = els.btnTestConnectionOC || btn;
+    const apiKey = els.providerApiKey?.value.trim() || '';
+    const customUrl = els.providerBaseUrl?.value.trim() || '';
+    const defaultUrl = PROVIDER_DEFAULTS[currentProvider]?.baseUrl || '';
+    const endpoint = normalizeEndpoint(customUrl || defaultUrl);
+    if(!endpoint){ setTestStatus(t('baseUrlNotSet'),'error'); return; }
+    if(!apiKey) setTestStatus('Hermes API_SERVER_KEY is required for remote/non-loopback API servers.','warning');
+
+    await new Promise(r=>chrome.storage.local.set({ apiKey, apiEndpoint:endpoint },r));
+    const perm=await ensureHostPermission(endpoint);
+    if(!perm.granted){ setTestStatus(t('unauthorized'),'error'); return; }
+
+    hBtn.disabled=true; hBtn.textContent=t('openclawConnecting'); setTestStatus(t('testing'));
+    try{
+      const headers = {};
+      if(apiKey) headers.Authorization = 'Bearer ' + apiKey;
+      const base = endpoint.replace(/\/+$/,'').replace(/\/v1$/,'');
+      const modelsBase = base + '/v1';
+      let ok = false;
+
+      const modelsResp = await fetch(modelsBase + '/models', { headers });
+      if(modelsResp.ok){
+        ok = true;
+      } else if(modelsResp.status === 401 || modelsResp.status === 403){
+        const body = await modelsResp.text();
+        throw new Error(getHttpStatusMessage(modelsResp, body));
+      }
+
+      if(!ok){
+        const healthResp = await fetch(base + '/health', { headers });
+        if(healthResp.ok){
+          ok = true;
+        } else if(![404].includes(healthResp.status)){
+          const body = await healthResp.text();
+          throw new Error(getHttpStatusMessage(healthResp, body));
+        }
+      }
+
+      if(!ok){
+        const chatHeaders = { 'Content-Type':'application/json', ...headers };
+        const chatResp = await fetch(buildChatCompletionsUrl(endpoint), {
+          method:'POST',
+          headers: chatHeaders,
+          body: JSON.stringify({
+            model: PROVIDER_DEFAULTS[currentProvider]?.testModel || getProviderPrimaryModelName(currentProvider),
+            messages:[{role:'user',content:'hello'}],
+            max_tokens:5,
+            stream:false
+          })
+        });
+        if(!chatResp.ok){
+          const body = await chatResp.text();
+          throw new Error(getHttpStatusMessage(chatResp, body));
+        }
+      }
+
+      setTestStatus('','');
+      hBtn.textContent=t('openclawDisconnect');
+      hBtn.disabled=false;
+      hBtn.classList.add('btn-connected');
+      enableConnectedAgentModel();
+    }catch(e){
+      const m=e.message||String(e);
+      if(/Failed to fetch/i.test(m)){
+        const origin = chrome?.runtime?.id ? `chrome-extension://${chrome.runtime.id}` : 'chrome-extension://<extension-id>';
+        setTestStatus(`Cannot connect. For browser access, set API_SERVER_CORS_ORIGINS=${origin}, then restart hermes gateway.`,'error');
+      }
+      else setTestStatus(tpl('failedPrefix',{msg:m}),'error');
+      hBtn.textContent=t('failedLabel');
+      setTimeout(()=>{ hBtn.textContent=t('openclawConnect'); hBtn.disabled=false; hBtn.classList.remove('btn-connected'); },2500);
     }
     return;
   }
@@ -1647,10 +1782,11 @@ async function testConnection(){
       const headers={ 'Content-Type':'application/json' };
       if(apiKey) headers.Authorization='Bearer '+apiKey;
       const chatUrl=buildChatCompletionsUrl(endpoint);
+      const testModel = PROVIDER_DEFAULTS[currentProvider]?.testModel || 'gpt-3.5-turbo';
       const r2=await fetch(chatUrl,{
         method:'POST',
         headers,
-        body:JSON.stringify({ model:'gpt-3.5-turbo', messages:[{role:'system',content:'ping'},{role:'user',content:'hello'}], max_tokens:5 })
+        body:JSON.stringify({ model:testModel, messages:[{role:'system',content:'ping'},{role:'user',content:'hello'}], max_tokens:5 })
       });
       if(!r2.ok){
         const t=await r2.text(); throw new Error('HTTP '+r2.status+' '+t.slice(0,120));
@@ -1839,7 +1975,8 @@ function updateMergedModels(){
     providerConfigs[providerId] = {
       apiKey: provider.apiKey || '',
       baseUrl: provider.customBaseUrl || provider.baseUrl || '',
-      ...(PROVIDER_DEFAULTS[providerId]?.isOpenClaw ? { sessionKey: provider.sessionKey || '', isOpenClaw: true } : {})
+      ...(PROVIDER_DEFAULTS[providerId]?.isOpenClaw ? { sessionKey: provider.sessionKey || '', isOpenClaw: true } : {}),
+      ...(PROVIDER_DEFAULTS[providerId]?.isAgentProvider ? { isAgentProvider: true } : {})
     };
   });
   
