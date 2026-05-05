@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.21.24] - 2026-05-05
+### Docs — 官網介紹頁同步 Hermes
+- `docs/index.html` 與 `docs/en/index.html` 的介紹頁供應商統計由 12 更新為 13，並在本地供應商列表加入 Hermes（Beta）。
+- `docs/changelog.html` 與 `docs/en/changelog.html` 新增對應更新條目，保持文件站與版本紀錄一致。
+
+---
+
 ## [2.21.23] - 2026-05-05
 ### Docs — Hermes Agent 介紹與快速上手
 - README（中英文）新增 Hermes Agent 介紹區塊，包含定位、預設 Base URL / model、以及 5 步驟快速上手。
