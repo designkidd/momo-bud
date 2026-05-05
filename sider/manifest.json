@@ -2,7 +2,7 @@
 {
   "name": "Momo AI Bud",
   "description": "Friendly AI chat sidebar — Momo AI Bud",
-  "version": "2.21.24",
+  "version": "2.21.25",
   "manifest_version": 3,
   "icons": {
     "16": "icons/icon16.png",

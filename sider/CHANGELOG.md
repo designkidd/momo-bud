@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.21.25] - 2026-05-05
+### Docs — Hermes / OpenClaw 分類理順
+- 文件中將 `Hermes` 與 `OpenClaw` 從「本地供應商」獨立為「Agent / Gateway 供應商（獨立）」；`Ollama` 與 `LM Studio` 保留在本地模型供應商。
+- 同步調整中英文 `docs/index.html` 與 `docs/*/ai-providers.html` 的分類文案，避免首頁與供應商頁分類不一致。
+
+---
+
 ## [2.21.24] - 2026-05-05
 ### Docs — 官網介紹頁同步 Hermes
 - `docs/index.html` 與 `docs/en/index.html` 的介紹頁供應商統計由 12 更新為 13，並在本地供應商列表加入 Hermes（Beta）。
