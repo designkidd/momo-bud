@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.21.28] - 2026-05-05
+### Docs — 英文 AI Providers 細節修正
+- `docs/en/ai-providers.html` 的 Configuring a Provider 第 3 點補齊 Hermes 條件，明確標示「local model providers usually don't；Hermes 通常需要 `API_SERVER_KEY`」。
+- 修正英文分類敘述最後一個遺漏句，讓中英文文件語意完全對齊。
+
+---
+
 ## [2.21.27] - 2026-05-05
 ### Docs — AI Providers 內文分類語句一致化
 - 調整中英文 `docs/ai-providers.html` 與 `docs/en/ai-providers.html` 的段落文字，將「本地供應商」舊措辭統一為「本地模型供應商 + 獨立 Agent / Gateway 供應商」語意。
