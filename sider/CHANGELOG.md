@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.21.26] - 2026-05-05
+### Docs — Web Search 英文文件修正
+- 修正 `docs/en/web-search.html` 仍列出已不存在的 Google / SearXNG 搜尋引擎，改為與實際設定頁一致的 DuckDuckGo（預設）、Brave、Tavily。
+- 同步補齊 Brave / Tavily 的描述文字，避免英文文件與產品行為不一致。
+
+---
+
 ## [2.21.25] - 2026-05-05
 ### Docs — Hermes / OpenClaw 分類理順
 - 文件中將 `Hermes` 與 `OpenClaw` 從「本地供應商」獨立為「Agent / Gateway 供應商（獨立）」；`Ollama` 與 `LM Studio` 保留在本地模型供應商。
