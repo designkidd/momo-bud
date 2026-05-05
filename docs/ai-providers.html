@@ -111,6 +111,13 @@ API_SERVER_CORS_ORIGINS=*</code></pre>
   <li>在 Momo 選擇 <strong>Hermes (beta)</strong>，保留預設 Base URL 或填入你的遠端 URL，然後啟用 <code>hermes-agent</code> 模型。</li>
 </ol>
 
+<h3>Hermes 使用建議（Momo 內）</h3>
+<ul>
+  <li>先按 <strong>Connect</strong> 確認 gateway 可用，再開始聊天，可避免未連線直接送出導致 401/403。</li>
+  <li>若你剛切換到 Hermes，建議直接開新對話，避免把其他 provider 的上下文混入 Agent 任務。</li>
+  <li>若使用遠端 Hermes，請優先確認目標機器防火牆與埠號（預設 8642）已開啟。</li>
+</ul>
+
 <h2>設定供應商</h2>
 <ol>
   <li>開啟側邊欄，點擊右上角 <strong>設定</strong>（⚙️）。</li>

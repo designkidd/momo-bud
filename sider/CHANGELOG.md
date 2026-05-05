@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.21.23] - 2026-05-05
+### Docs — Hermes Agent 介紹與快速上手
+- README（中英文）新增 Hermes Agent 介紹區塊，包含定位、預設 Base URL / model、以及 5 步驟快速上手。
+- 文件頁 `docs/ai-providers.html` 與 `docs/en/ai-providers.html` 補充 Hermes 使用建議，強化 Connect 先行、切換後新對話、遠端防火牆/埠號檢查等實務指引。
+
+---
+
 ## [2.21.22] - 2026-05-05
 ### Added — Hermes Setup Guide
 - Hermes (beta) 現在和 OpenClaw (beta) 一樣，在 Connect row 右側顯示 `Setup Guide` 按鈕。

@@ -22,6 +22,32 @@
 - ⌨️ 快捷鍵支援
 - 👁️ 可調整字體大小、字粗，方便閱讀
 
+## 🧪 Hermes Agent（Beta）介紹
+
+Hermes Agent 是一個可本地運行的 AI Agent 伺服器。  
+在 Momo AI Bud 中，你可以把它當作「本地專屬助理」來用：資料可留在自己的環境、延遲低、可自管 gateway 與金鑰。
+
+- 預設 Base URL：`http://127.0.0.1:8642/v1`
+- 預設模型：`hermes-agent`
+- 連線方式：OpenAI 相容 HTTP API（非 OpenClaw 的 WebSocket）
+
+### Hermes 快速上手
+
+1. 在 Hermes `.env` 啟用 API Server：
+
+```env
+API_SERVER_ENABLED=true
+API_SERVER_HOST=0.0.0.0
+API_SERVER_PORT=8642
+API_SERVER_KEY=<your-secret-key>
+API_SERVER_CORS_ORIGINS=*
+```
+
+2. 重啟 Hermes Gateway。  
+3. 開啟 Momo 設定頁，選擇 **Hermes (beta)**。  
+4. 按 **Connect** 測試連線，通過後啟用 `hermes-agent`。  
+5. 若出現 401/403，先檢查 `API_SERVER_KEY` 與 CORS 設定是否一致。
+
 ## 🆓 免費 API 供應商
 
 無需信用卡，幾分鐘即可開始使用：

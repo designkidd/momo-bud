@@ -22,6 +22,32 @@
 - ⌨️ Keyboard shortcuts
 - 👁️ Adjustable font size & weight for comfortable reading
 
+## 🧪 Hermes Agent (Beta) Overview
+
+Hermes Agent is a local-first AI agent server.  
+With Momo AI Bud, it works as your private in-browser assistant: lower latency, self-managed gateway, and easier control over local data flow.
+
+- Default Base URL: `http://127.0.0.1:8642/v1`
+- Default model: `hermes-agent`
+- Connection mode: OpenAI-compatible HTTP API (not OpenClaw WebSocket)
+
+### Hermes Quick Start
+
+1. Enable the API server in your Hermes `.env`:
+
+```env
+API_SERVER_ENABLED=true
+API_SERVER_HOST=0.0.0.0
+API_SERVER_PORT=8642
+API_SERVER_KEY=<your-secret-key>
+API_SERVER_CORS_ORIGINS=*
+```
+
+2. Restart the Hermes gateway.  
+3. Open Momo settings and choose **Hermes (beta)**.  
+4. Click **Connect**, then enable `hermes-agent` after the check passes.  
+5. If you see 401/403, verify `API_SERVER_KEY` and CORS settings first.
+
 ## 🆓 Free API Providers
 
 No credit card needed. Get started in minutes:

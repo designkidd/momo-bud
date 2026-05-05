@@ -93,6 +93,13 @@ API_SERVER_CORS_ORIGINS=*</code></pre>
   <li>Select <strong>Hermes (beta)</strong> in Momo, keep the default Base URL or enter your remote URL, then enable the <code>hermes-agent</code> model.</li>
 </ol>
 
+<h3>Recommended Hermes Workflow in Momo</h3>
+<ul>
+  <li>Click <strong>Connect</strong> first to verify gateway availability before sending messages, so you can avoid immediate 401/403 failures.</li>
+  <li>When switching from another provider to Hermes, starting a new chat is recommended to keep agent context clean.</li>
+  <li>For remote Hermes servers, confirm firewall rules and port exposure (default: 8642) before debugging app-side settings.</li>
+</ul>
+
 <h2>Configuring a Provider</h2>
 <ol>
   <li>Open the sidebar and click <strong>Settings</strong> (⚙️) in the top-right corner.</li>
